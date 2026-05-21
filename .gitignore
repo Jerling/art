@@ -3,6 +3,18 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Test / Coverage
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # IDE
 .idea/
@@ -13,14 +25,24 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Build / dist
-*.egg-info/
-dist/
-build/
-
-# Environment
+# Environment (secrets)
 .env
 .env.local
+.env.*
+!.env.example
+
+# FastAPI / Uvicorn
+*.pid
+
+# SQLite (data files — runtime only, never commit)
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Config (don't commit runtime config with secrets)
+config.json
+config.local.json
 
 # Nutstore/Jianguoyun sync artifacts
 .nutstore/
@@ -28,3 +50,8 @@ build/
 # Private docs (keep only public)
 *.draft.md
 **/secrets/
+
+# Node / npm (Phase 2+ PWA frontend)
+node_modules/
+dist/
+*.vue.hbc
