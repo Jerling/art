@@ -161,8 +161,8 @@ class MiniMaxProvider:
 **核心职责**: 角色定义、切换、权限隔离
 
 ```python
-from pydantic import BaseModel
-from datetime import datetime
+from pydantic import BaseModel, Field, field_validator
+from datetime import datetime, date
 from uuid import UUID, uuid4
 
 class Role(BaseModel):
@@ -192,6 +192,11 @@ class Perspective(str, Enum):
 **核心职责**: 任务生命周期、状态机、role_tag 隔离
 
 ```python
+from pydantic import BaseModel, Field, field_validator
+from datetime import datetime, date
+from uuid import UUID, uuid4
+from enum import Enum
+
 class TaskStatus(str, Enum):
     INBOX = "inbox"           # 收集箱（新任务入口）
     TODO = "todo"             # 待办
@@ -226,18 +231,33 @@ class Task(BaseModel):
 
     # AI 元数据
     ai_summary: str | None = None
-    intent: TaskIntent | None = None
+    intent_data: IntentData | None = None  # FIX B4: was raw JSON TEXT, now Pydantic-validated
 
     # 外部集成
     external_id: str | None = None
     source: TaskSource = TaskSource.MANUAL
 
-class TaskIntent(BaseModel):
-    action: str                    # feature/bug/refactor/docs...
-    estimated_hours: float | None = None
-    required_roles: list[UUID] = []
-    suggested_priority: int = 2
-    related_tasks: list[UUID] = []
+
+class IntentData(BaseModel):
+    """FIX B4: Pydantic schema for intent_data JSON stored on tasks.
+
+    All external intent_data input must be validated via IntentData.parse_obj().
+    Previously stored as raw JSON TEXT with no schema enforcement.
+    """
+    action: str = "unknown"
+    estimated_hours: float | None = Field(default=None, ge=0, le=168)
+    suggested_priority: str | None = None  # low/medium/high/urgent
+    suggested_due_date: date | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    raw_text: str | None = None
+    extra: dict = Field(default_factory=dict)
+
+    @field_validator("suggested_due_date", mode="before")
+    @classmethod
+    def _parse_date(cls, v):
+        if isinstance(v, str):
+            return date.fromisoformat(v)
+        return v
 ```
 
 **role_tag 隔离设计**:
@@ -279,6 +299,39 @@ class WeChatAdapter:
     async def reply_to_message(self, message_id: str, content: str) -> bool:
         """回复微信消息（可选）"""
         ...
+
+
+class WeChatCrypto:
+    """FIX B3: Real HMAC-SHA1 signature verification for WeChat webhook.
+
+    Previously this was a placeholder returning True unconditionally.
+    Now implements the official WeChat signature verification algorithm:
+      sha1(token + timestamp + nonce), sorted alphabetically.
+    """
+
+    def __init__(self, token: str) -> None:
+        self.token = token
+
+    def verify_signature(
+        self,
+        signature: str,
+        timestamp: str,
+        nonce: str,
+        encrypt: str | None = None,
+    ) -> bool:
+        """Verify the WeChat callback signature.
+
+        Returns True only if HMAC-SHA1(token + sorted(timestamp, nonce)) == signature.
+        """
+        import hashlib
+        import hmac
+
+        if not all([signature, timestamp, nonce, self.token]):
+            return False
+        parts = sorted([self.token, timestamp, nonce])
+        canonical = "".join(parts)
+        expected = hashlib.sha1(canonical.encode()).hexdigest()
+        return hmac.compare_digest(expected, signature)
 ```
 
 **微信消息接收架构**:
@@ -668,7 +721,7 @@ CREATE TABLE tasks (
 
     -- AI 元数据（JSON 存储）
     ai_summary TEXT,
-    intent_data TEXT,  -- JSON: {action, estimated_hours, suggested_priority...}
+    intent_data TEXT,  -- FIX B4: JSON validated against IntentData Pydantic schema before write
 
     -- 外部引用
     external_id TEXT,
@@ -1402,9 +1455,9 @@ python-agent/
   },
 
   "auth": {
-    "secret_key": "your-secret-key-here",
+    "secret_key": "your-secret-key-here",  # FIX B1: override via JWT_SECRET_KEY env var in production
     "jwt_algorithm": "HS256",
-    "jwt_expire_days": 30
+    "jwt_expire_hours": 24  # FIX B1: was 720h (30d) — reduced to 24h for MVP security
   },
 
   "llm": {
@@ -1467,9 +1520,11 @@ class RedisConfig(BaseModel):
     url: str = "redis://localhost:6379/0"
 
 class AuthConfig(BaseModel):
-    secret_key: str
+    # FIX B1: secret_key MUST be provided via JWT_SECRET_KEY env var.
+    #         Never hardcode real secrets in config.json.
+    secret_key: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expire_days: int = 30
+    jwt_expire_hours: int = 24  # FIX B1: was 30 days (720h) — reduced to 24h
 
 class LLMProviderConfig(BaseModel):
     api_key: str
