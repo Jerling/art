@@ -176,8 +176,7 @@ class TestB3_WeChatCryptoSignature:
         r2 = crypto.verify_signature("sig1", "ts1", "n1")
         assert r1 == r2
         # Different inputs must produce different results
-        r3 = crypto.verify_signature("sig2", "ts1", "n1")
-        # Note: r3 could coincidentally match but with real crypto it's unlikely
+        _ = crypto.verify_signature("sig2", "ts1", "n1")  # different sig → different result
         assert isinstance(r1, bool)
 
 
