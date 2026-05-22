@@ -1,0 +1,143 @@
+"""Task CRUD API handler."""
+import math
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.schemas.task import (
+    PaginatedTasksResponse,
+    TaskCreate,
+    TaskResponse,
+    TaskStatus,
+    TaskStatusUpdate,
+    TaskUpdate,
+)
+from src.services.task import TaskService
+from src.storage.database import get_session
+
+router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+async def get_task_service(session: AsyncSession = Depends(get_session)) -> TaskService:
+    """Dependency: get TaskService."""
+    return TaskService(session)
+
+
+def _task_to_response(task, role_ids: list[int]) -> TaskResponse:
+    """Build a TaskResponse from a Task model instance."""
+    return TaskResponse(
+        id=task.id,
+        title=task.title,
+        description=task.description,
+        status=TaskStatus(task.status),
+        priority=task.priority,  # type: ignore[arg] — Pydantic coerces str→TaskPriority
+        estimated_hours=task.estimated_hours,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        role_ids=role_ids,
+    )
+
+
+@router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_task(
+    data: TaskCreate,
+    service: TaskService = Depends(get_task_service),
+) -> TaskResponse:
+    """Create a new task (optionally assigning roles)."""
+    try:
+        task = await service.create(data)
+        role_ids = await service._get_role_ids_for_task(task.id)
+        return _task_to_response(task, role_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+
+@router.get("", response_model=PaginatedTasksResponse)
+async def list_tasks(
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
+    role_id: Annotated[int | None, Query(description="Filter by role ID")] = None,
+    status: Annotated[TaskStatus | None, Query(description="Filter by status")] = None,
+    service: TaskService = Depends(get_task_service),
+) -> PaginatedTasksResponse:
+    """List tasks with pagination and optional filters."""
+    items, total = await service.list_tasks(
+        page=page, page_size=page_size, role_id=role_id, status=status
+    )
+    pages = math.ceil(total / page_size) if total > 0 else 0
+    task_responses = []
+    for task in items:
+        role_ids = await service._get_role_ids_for_task(task.id)
+        task_responses.append(_task_to_response(task, role_ids))
+    return PaginatedTasksResponse(
+        items=task_responses,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages,
+    )
+
+
+@router.get("/{task_id}", response_model=TaskResponse)
+async def get_task(
+    task_id: int,
+    service: TaskService = Depends(get_task_service),
+) -> TaskResponse:
+    """Get a task by ID."""
+    task = await service.get_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    role_ids = await service._get_role_ids_for_task(task.id)
+    return _task_to_response(task, role_ids)
+
+
+@router.put("/{task_id}", response_model=TaskResponse)
+async def update_task(
+    task_id: int,
+    data: TaskUpdate,
+    service: TaskService = Depends(get_task_service),
+) -> TaskResponse:
+    """Update a task (partial update)."""
+    try:
+        task = await service.update(task_id, data)
+        role_ids = await service._get_role_ids_for_task(task.id)
+        return _task_to_response(task, role_ids)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg) from e
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from e
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task(
+    task_id: int,
+    hard: Annotated[bool, Query(description="If true, permanently delete")] = False,
+    service: TaskService = Depends(get_task_service),
+) -> None:
+    """Delete a task (soft-delete by default)."""
+    try:
+        await service.delete(task_id, hard=hard)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@router.patch("/{task_id}/status", response_model=TaskResponse)
+async def update_task_status(
+    task_id: int,
+    data: TaskStatusUpdate,
+    service: TaskService = Depends(get_task_service),
+) -> TaskResponse:
+    """Transition a task's status (PENDING→IN_PROGRESS→DONE, or CANCELLED)."""
+    try:
+        task = await service.update_status(task_id, data)
+        role_ids = await service._get_role_ids_for_task(task.id)
+        return _task_to_response(task, role_ids)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg) from e
+        if "invalid" in msg.lower() or "transition" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg) from e
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from e
