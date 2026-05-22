@@ -82,7 +82,7 @@ class IntentData(BaseModel):
         raise ValueError(f"Invalid date format: {v!r}")
 
     @model_validator(mode="after")
-    def _validate_due_date_not_in_past(self) -> "IntentData":
+    def _validate_due_date_not_in_past(self) -> IntentData:
         if self.suggested_due_date is not None:
             if self.suggested_due_date < date.today():
                 # Downgrade to warning rather than rejection for past dates

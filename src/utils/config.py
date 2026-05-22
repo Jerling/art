@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,7 +23,7 @@ class AuthConfig(BaseModel):
     jwt_expire_hours: int = Field(default=24, description="JWT token validity in hours. Default 24h.")
 
     @model_validator(mode="after")
-    def _require_secret_key(self) -> "AuthConfig":
+    def _require_secret_key(self) -> AuthConfig:
         if not self.secret_key:
             secret = os.environ.get("JWT_SECRET_KEY", "")
             if not secret:
@@ -127,7 +126,7 @@ class AppConfig(BaseSettings):
     wechat: WeChatConfig = Field(default_factory=WeChatConfig)
 
     @classmethod
-    def load_from_file(cls, path: str | Path = "config.json") -> "AppConfig":
+    def load_from_file(cls, path: str | Path = "config.json") -> AppConfig:
         """Load config from a JSON file, merging with env var overrides."""
         import json
 

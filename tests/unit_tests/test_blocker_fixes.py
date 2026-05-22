@@ -144,9 +144,9 @@ class TestB3_WeChatCryptoSignature:
 
     def test_verify_signature_correct_hmac_sha1(self):
         """Signature must be HMAC-SHA1(token + sorted(timestamp, nonce))."""
-        from src.integrations.wechat.crypto import WeChatCrypto
         import hashlib
-        import hmac
+
+        from src.integrations.wechat.crypto import WeChatCrypto
 
         token = "my_wechat_token"
         timestamp = "1234567890"
@@ -188,7 +188,7 @@ class TestB4_IntentDataSchema:
     """Tests for FIX B4: intent_data must be validated via Pydantic schema."""
 
     def test_valid_intent_data_parses(self):
-        from src.domain.intent import IntentData, IntentAction, TaskPriority
+        from src.domain.intent import IntentAction, IntentData, TaskPriority
 
         data = IntentData(
             action=IntentAction.CREATE_TASK,

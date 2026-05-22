@@ -125,8 +125,9 @@ class WeChatCrypto:
         """
         import base64
         import struct
-        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
         from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
         if not echostr:
             return ""

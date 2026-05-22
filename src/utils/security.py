@@ -5,7 +5,7 @@ FIX B1: JWT tokens expire in 24 hours (was 720h which is too long for MVP).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
@@ -45,8 +45,8 @@ def create_access_token(data: dict[str, Any], *, expires_delta: timedelta | None
     if expires_delta is not None:
         expire_hours = int(expires_delta.total_seconds() / 3600)
 
-    expire = datetime.now(timezone.utc) + timedelta(hours=expire_hours)
-    to_encode |= {"exp": expire, "iat": datetime.now(timezone.utc)}
+    expire = datetime.now(UTC) + timedelta(hours=expire_hours)
+    to_encode |= {"exp": expire, "iat": datetime.now(UTC)}
 
     return jwt.encode(
         to_encode,
