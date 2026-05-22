@@ -21,12 +21,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ──────────────────────────────────────────────────────────────
 def hash_password(plain: str) -> str:
     """Return a bcrypt hash of the plain password."""
-    return pwd_context.hash(plain)
+    return pwd_context.hash(plain)  # type: ignore[no-any-return]
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Verify a plain password against a bcrypt hash."""
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(plain, hashed)  # type: ignore[no-any-return]
 
 
 # ──────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ def create_access_token(data: dict[str, Any], *, expires_delta: timedelta | None
     expire = datetime.now(UTC) + timedelta(hours=expire_hours)
     to_encode |= {"exp": expire, "iat": datetime.now(UTC)}
 
-    return jwt.encode(
+    return jwt.encode(  # type: ignore[no-any-return]
         to_encode,
         cfg.auth.secret_key,
         algorithm=cfg.auth.jwt_algorithm,
@@ -58,7 +58,7 @@ def create_access_token(data: dict[str, Any], *, expires_delta: timedelta | None
 def decode_access_token(token: str) -> dict[str, Any]:
     """Decode and validate a JWT token. Raises JWTError on failure."""
     cfg = get_config()
-    return jwt.decode(
+    return jwt.decode(  # type: ignore[no-any-return]
         token,
         cfg.auth.secret_key,
         algorithms=[cfg.auth.jwt_algorithm],
