@@ -1,6 +1,6 @@
 [project]
 name = "art-agent"
-version = "0.1.0-sprint0"
+version = "0.1.0"
 description = "Art: AI Role-based Task Agent"
 requires-python = ">=3.11"
 dependencies = [
