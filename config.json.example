@@ -1,0 +1,40 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8765,
+    "debug": false
+  },
+
+  "database": {
+    "url": "sqlite+aiosqlite:///./data/agent.db"
+  },
+
+  "redis": {
+    "url": "redis://localhost:6379/0"
+  },
+
+  "auth": {
+    "secret_key": "your-secret-key-here",
+    "jwt_algorithm": "HS256",
+    "jwt_expire_hours": 24
+  },
+
+  "llm_provider": "minimax",
+
+  "minimax": {
+    "api_key": "",
+    "model": "MiniMax-Text-01"
+  },
+
+  "openai": {
+    "api_key": "",
+    "model": "gpt-4o"
+  },
+
+  "wechat": {
+    "app_id": "",
+    "app_secret": "",
+    "token": "",
+    "aes_key": ""
+  }
+}
