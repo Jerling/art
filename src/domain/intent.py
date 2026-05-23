@@ -91,7 +91,6 @@ class IntentData(BaseModel):
         return self
 
     model_config = {
-        "use_enum_values": True,
         "json_schema_extra": {
             "example": {
                 "action": "create_task",
