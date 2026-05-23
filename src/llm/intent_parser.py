@@ -144,10 +144,13 @@ class IntentParser:
         # Timeout errors → specific markers
         if isinstance(exc, httpx.TimeoutException):
             return "connect_timeout" if "connect" in str(exc).lower() else "read_timeout"
-        # httpx DecodeError wraps json.JSONDecodeError from response.json() failures
-        if isinstance(exc, httpx.DecodeError):
+        # httpx DecodingError wraps json.JSONDecodeError from response.json() failures
+        # (renamed from DecodeError in httpx >= 0.28)
+        if hasattr(httpx, "DecodingError") and isinstance(exc, httpx.DecodingError):
             return "invalid_json"
-        # Check nested cause (IntentParsingError → LLMError)
+        if hasattr(httpx, "DecodeError") and isinstance(exc, httpx.DecodeError):  # type: ignore[attr-defined]
+            return "invalid_json"
+        # Check nested cause — complete() wraps httpx errors into LLMError
         if exc.__cause__ is not None and isinstance(exc.__cause__, Exception):
             return self._failure_marker_for(exc.__cause__)
         return "llm_error"
