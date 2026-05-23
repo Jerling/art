@@ -95,6 +95,27 @@ class WeChatConfig(BaseModel):
     aes_key: str = ""
 
 
+class OpenVikingMCPConfig(BaseModel):
+    """OpenViking MCP Server configuration for tool execution layer.
+
+    ADR-001: OpenViking MCP = tool execution layer, separated from
+    MiniMax inference layer.
+    """
+
+    # Path to the OpenViking MCP server executable
+    command: str = ""
+    # Arguments to pass to the OpenViking command
+    args: list[str] = Field(default_factory=list)
+    # Environment variables for the server process
+    env: dict[str, str] | None = None
+    # Working directory for the server process
+    cwd: str | None = None
+    # Connection timeout in seconds
+    timeout_seconds: float = 10.0
+    # Enable/disable MCP tool calls
+    enabled: bool = True
+
+
 # ──────────────────────────────────────────────────────────────
 # AppConfig — top-level configuration
 # ──────────────────────────────────────────────────────────────
@@ -124,6 +145,7 @@ class AppConfig(BaseSettings):
     anthropic: LLMProviderConfig | None = None
     ollama: LLMProviderConfig | None = None
     wechat: WeChatConfig = Field(default_factory=WeChatConfig)
+    open_viking: OpenVikingMCPConfig = Field(default_factory=OpenVikingMCPConfig)
 
     @classmethod
     def load_from_file(cls, path: str | Path = "config.json") -> AppConfig:

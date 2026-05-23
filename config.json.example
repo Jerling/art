@@ -36,5 +36,14 @@
     "app_secret": "",
     "token": "",
     "aes_key": ""
+  },
+
+  "open_viking": {
+    "command": "",
+    "args": [],
+    "env": null,
+    "cwd": null,
+    "timeout_seconds": 10.0,
+    "enabled": false
   }
 }
