@@ -1,0 +1,126 @@
+{
+  "version": "1.0",
+  "description": "Golden dataset for MiniMax intent parsing. Each entry has a user message and its expected parsed IntentData output.",
+  "cases": [
+    {
+      "id": "case_001",
+      "input": "下周三前完成 API Gateway 的设计文档",
+      "expected": {
+        "action": "create_task",
+        "estimated_hours": 4.0,
+        "suggested_priority": "high",
+        "suggested_due_date": "2026-05-27",
+        "confidence": 0.9,
+        "raw_text": "下周三前完成 API Gateway 的设计文档"
+      }
+    },
+    {
+      "id": "case_002",
+      "input": "帮我创建一个任务： review PR #42",
+      "expected": {
+        "action": "create_task",
+        "estimated_hours": 0.5,
+        "suggested_priority": "medium",
+        "suggested_due_date": null,
+        "confidence": 0.88,
+        "raw_text": "帮我创建一个任务： review PR #42"
+      }
+    },
+    {
+      "id": "case_003",
+      "input": "今天必须完成这个 bug 修复",
+      "expected": {
+        "action": "create_task",
+        "estimated_hours": 2.0,
+        "suggested_priority": "urgent",
+        "suggested_due_date": "2026-05-22",
+        "confidence": 0.85,
+        "raw_text": "今天必须完成这个 bug 修复"
+      }
+    },
+    {
+      "id": "case_004",
+      "input": "列出我所有待办任务",
+      "expected": {
+        "action": "list_tasks",
+        "estimated_hours": null,
+        "suggested_priority": null,
+        "suggested_due_date": null,
+        "confidence": 0.95,
+        "raw_text": "列出我所有待办任务"
+      }
+    },
+    {
+      "id": "case_005",
+      "input": "把任务 T-123 分配给张明",
+      "expected": {
+        "action": "assign_task",
+        "estimated_hours": null,
+        "suggested_priority": null,
+        "suggested_due_date": null,
+        "confidence": 0.92,
+        "raw_text": "把任务 T-123 分配给张明"
+      }
+    },
+    {
+      "id": "case_006",
+      "input": "你好",
+      "expected": {
+        "action": "unknown",
+        "estimated_hours": null,
+        "suggested_priority": null,
+        "suggested_due_date": null,
+        "confidence": 0.0,
+        "raw_text": "你好"
+      }
+    },
+    {
+      "id": "case_007",
+      "input": "完成代码评审后通知我",
+      "expected": {
+        "action": "complete_task",
+        "estimated_hours": null,
+        "suggested_priority": "medium",
+        "suggested_due_date": null,
+        "confidence": 0.78,
+        "raw_text": "完成代码评审后通知我"
+      }
+    },
+    {
+      "id": "case_008",
+      "input": "这周内需要完成 API 文档的编写，大概需要 8 小时",
+      "expected": {
+        "action": "create_task",
+        "estimated_hours": 8.0,
+        "suggested_priority": "high",
+        "suggested_due_date": "2026-05-28",
+        "confidence": 0.9,
+        "raw_text": "这周内需要完成 API 文档的编写，大概需要 8 小时"
+      }
+    },
+    {
+      "id": "case_009",
+      "input": "你好，请问有什么可以帮助你的？",
+      "expected": {
+        "action": "unknown",
+        "estimated_hours": null,
+        "suggested_priority": null,
+        "suggested_due_date": null,
+        "confidence": 0.0,
+        "raw_text": "你好，请问有什么可以帮助你的？"
+      }
+    },
+    {
+      "id": "case_010",
+      "input": "PR review request: 需要张明审批，紧急",
+      "expected": {
+        "action": "create_task",
+        "estimated_hours": 0.5,
+        "suggested_priority": "urgent",
+        "suggested_due_date": null,
+        "confidence": 0.88,
+        "raw_text": "PR review request: 需要张明审批，紧急"
+      }
+    }
+  ]
+}
