@@ -6,7 +6,7 @@ via the OpenViking MCP Server (ADR-001: tool execution layer).
 The message flow is:
   1. WeChat message received via webhook
   2. Message parsed and validated
-  3. AI Brain (MiniMax) determines intent
+  3. AI Brain (GLM) determines intent
   4. If tool execution is needed, MCP Client calls OpenViking tools
   5. Tool result returned to user via WeChat
 

@@ -14,7 +14,8 @@ import re
 from typing import TYPE_CHECKING
 
 from src.domain.intent import IntentAction, IntentData, TaskPriority
-from src.llm.minimax import LLMError, MiniMaxProvider, get_minimax_provider
+from src.llm.base import LLMError
+from src.llm.glm import GLMProvider, get_glm_provider
 
 if TYPE_CHECKING:
     pass
@@ -69,7 +70,7 @@ class IntentParsingError(Exception):
 class IntentParser:
     """Parses natural language messages into structured IntentData.
 
-    Uses MiniMax LLM to analyze user messages and extract intent entities.
+    Uses GLM LLM to analyze user messages and extract intent entities.
     The result is a validated IntentData object.
 
     Usage:
@@ -77,16 +78,16 @@ class IntentParser:
         intent = await parser.parse("下周三前完成 API 设计")
     """
 
-    def __init__(self, provider: MiniMaxProvider | None = None) -> None:
+    def __init__(self, provider: GLMProvider | None = None) -> None:
         """Initialize the intent parser.
 
         Args:
-            provider: MiniMax provider instance. If None, created from config.
+            provider: GLM provider instance. If None, created from config.
         """
         self._provider = provider
 
     @property
-    def provider(self) -> MiniMaxProvider:
+    def provider(self) -> GLMProvider:
         """Return the provider, which must be set at construction time.
 
         This property exists so callers can access the provider for lifecycle
@@ -132,7 +133,9 @@ class IntentParser:
 
     def _failure_marker_for(self, exc: Exception) -> str:
         """Determine log marker from an LLM error or its cause chain."""
-        from src.llm.minimax import APIError, AuthenticationError, RateLimitError
+        import json
+
+        from src.llm.base import APIError, AuthenticationError, RateLimitError
         import httpx
 
         if isinstance(exc, RateLimitError):
@@ -144,6 +147,9 @@ class IntentParser:
         # Timeout errors → specific markers
         if isinstance(exc, httpx.TimeoutException):
             return "connect_timeout" if "connect" in str(exc).lower() else "read_timeout"
+        # JSON decode errors → invalid_json marker
+        if isinstance(exc, json.JSONDecodeError):
+            return "invalid_json"
         # httpx DecodingError wraps json.JSONDecodeError from response.json() failures
         # (renamed from DecodeError in httpx >= 0.28)
         if hasattr(httpx, "DecodingError") and isinstance(exc, httpx.DecodingError):
@@ -256,15 +262,15 @@ class IntentParser:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def get_intent_parser(provider: MiniMaxProvider | None = None) -> IntentParser:
+async def get_intent_parser(provider: GLMProvider | None = None) -> IntentParser:
     """Factory function to get an IntentParser.
 
     Args:
-        provider: Optional pre-configured MiniMax provider.
+        provider: Optional pre-configured GLM provider.
 
     Returns:
         IntentParser instance.
     """
     if provider is None:
-        provider = await get_minimax_provider()
+        provider = await get_glm_provider()
     return IntentParser(provider=provider)

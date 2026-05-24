@@ -99,7 +99,7 @@ class OpenVikingMCPConfig(BaseModel):
     """OpenViking MCP Server configuration for tool execution layer.
 
     ADR-001: OpenViking MCP = tool execution layer, separated from
-    MiniMax inference layer.
+    GLM inference layer.
     """
 
     # Path to the OpenViking MCP server executable
@@ -139,8 +139,9 @@ class AppConfig(BaseSettings):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
-    llm_provider: str = "minimax"
+    llm_provider: str = "glm"
     minimax: LLMProviderConfig | None = None
+    glm: LLMProviderConfig | None = None
     openai: LLMProviderConfig | None = None
     anthropic: LLMProviderConfig | None = None
     ollama: LLMProviderConfig | None = None
