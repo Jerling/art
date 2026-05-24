@@ -31,7 +31,8 @@ Given a user message in Chinese or English, extract structured task information.
 
 Return ONLY valid JSON with these fields:
 {
-  "action": "create_task" | "update_task" | "assign_task" | "complete_task" | "delete_task" | "list_tasks" | "help" | "unknown",
+  "action": "create_task" | "query_task" | "unknown",
+  "title": string | null,
   "estimated_hours": number | null,
   "suggested_priority": "low" | "medium" | "high" | "urgent" | null,
   "suggested_due_date": "YYYY-MM-DD" | null,
@@ -40,13 +41,16 @@ Return ONLY valid JSON with these fields:
 }
 
 Rules:
-- estimated_hours: 0.5 increments, max 168 (1 week). null if not mentioned.
-- suggested_priority: "urgent" only if deadline is within 24h or explicitly urgent.
+- action: "create_task" if user wants to create/add a task, "query_task" if listing/searching tasks, "unknown" otherwise.
+- title: For create_task, extract a concise task title from the message (max 200 chars). null for query_task/unknown.
+- estimated_hours: 0.5 increments, max 168 (1 week). null if not mentioned or not applicable.
+- suggested_priority: "urgent" only if deadline is within 24h or explicitly urgent. null if not mentioned.
 - suggested_due_date: ISO date string (YYYY-MM-DD), null if not mentioned.
 - confidence: how confident you are in the action classification (0.0-1.0).
 - raw_text: always copy the original user message exactly.
 - If the message is not about a task (e.g., just greeting), set action to "unknown".
 """
+
 
 USER_PROMPT_TEMPLATE = """解析以下用户消息，提取结构化任务信息：
 
@@ -213,12 +217,10 @@ class IntentParser:
                 e,
                 json_text[:200],
             )
-            # Return unknown intent rather than crashing
-            return IntentData(
-                action=IntentAction.UNKNOWN,
-                confidence=0.0,
-                raw_text=original_message,
-            )
+            raise IntentParsingError(
+                f"Schema validation failed: {e}",
+                failure_marker="invalid_json",
+            ) from e
 
     @staticmethod
     def _extract_json(text: str) -> str | None:

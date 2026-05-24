@@ -77,8 +77,8 @@ async def test_parse_create_task(mock_provider: MiniMaxProvider, golden_dataset:
 
 
 @pytest.mark.asyncio
-async def test_parse_list_tasks(mock_provider: MiniMaxProvider, golden_dataset: list[dict[str, Any]]) -> None:
-    """Test that a 'list tasks' message is correctly parsed."""
+async def test_parse_query_tasks(mock_provider: MiniMaxProvider, golden_dataset: list[dict[str, Any]]) -> None:
+    """Test that a 'query tasks' message is correctly parsed."""
     case = next(c for c in golden_dataset if c["id"] == "case_004")
 
     expected_response = json.dumps(case["expected"], ensure_ascii=False)
@@ -87,13 +87,13 @@ async def test_parse_list_tasks(mock_provider: MiniMaxProvider, golden_dataset: 
     parser = IntentParser(provider=mock_provider)
     result = await parser.parse(case["input"])
 
-    assert result.action == IntentAction.LIST_TASKS
+    assert result.action == IntentAction.QUERY_TASK
     assert result.confidence == 0.95
 
 
 @pytest.mark.asyncio
 async def test_parse_assign_task(mock_provider: MiniMaxProvider, golden_dataset: list[dict[str, Any]]) -> None:
-    """Test that an 'assign task' message is correctly parsed."""
+    """Test that an 'assign task' message is correctly parsed as UNKNOWN."""
     case = next(c for c in golden_dataset if c["id"] == "case_005")
 
     expected_response = json.dumps(case["expected"], ensure_ascii=False)
@@ -102,7 +102,9 @@ async def test_parse_assign_task(mock_provider: MiniMaxProvider, golden_dataset:
     parser = IntentParser(provider=mock_provider)
     result = await parser.parse(case["input"])
 
-    assert result.action == IntentAction.ASSIGN_TASK
+    # assign_task is not in the simplified enum (CREATE_TASK/QUERY_TASK/UNKNOWN)
+    # The LLM prompt now only returns these 3 types, so assign_task maps to UNKNOWN
+    assert result.action == IntentAction.UNKNOWN
 
 
 @pytest.mark.asyncio
@@ -320,7 +322,7 @@ async def test_p99_latency_under_5_seconds(mock_provider: MiniMaxProvider, golde
 
         # Sanity check: result is valid IntentData
         assert isinstance(result, IntentData)
-        assert result.action != IntentAction.UNKNOWN or case["id"] in ("case_006", "case_009")
+        assert result.action != IntentAction.UNKNOWN or case["id"] in ("case_005", "case_006", "case_007", "case_009")
 
     p99 = statistics.quantiles(latencies, n=100)[98]
     mean = statistics.mean(latencies)
@@ -377,6 +379,7 @@ def test_intent_data_accepts_valid_model() -> None:
     """Test that IntentData.model_validate accepts a valid intent dict."""
     data = {
         "action": "create_task",
+        "title": "完成 API 设计",
         "estimated_hours": 2.5,
         "suggested_priority": "high",
         "suggested_due_date": "2026-06-01",
@@ -386,6 +389,7 @@ def test_intent_data_accepts_valid_model() -> None:
     intent = IntentData.model_validate(data)
 
     assert intent.action == IntentAction.CREATE_TASK
+    assert intent.title == "完成 API 设计"
     assert intent.estimated_hours == 2.5
     assert intent.suggested_priority == TaskPriority.HIGH
     assert intent.suggested_due_date.year == 2026
