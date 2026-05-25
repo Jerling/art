@@ -14,6 +14,9 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.integrations.wechat.crypto import WeChatCrypto, get_wechat_config
+from src.services.intent import IntentService
+from src.services.task import TaskService
+from src.services.wechat_push import WeChatPushService
 from src.storage.database import get_session
 from src.storage.wechat_message import WeChatMessageStore
 
@@ -203,9 +206,34 @@ async def receive_wechat_message(
         # Log but don't fail the 200 — WeChat expects empty response
         logger.error("Failed to persist WeChat message: %s", exc)
 
-    # ── TODO: route to WeChatMessageService for MCP tool execution ──
-    # WeChat requires an empty 200 response. The message processing
-    # will be handled asynchronously in a follow-up task.
+    # ── Intent processing + WeChat push ──────────────────────────
+    # WeChat expects an empty 200 response immediately, so the
+    # intent processing and push happen after we've already committed
+    # the message to the DB. We do it synchronously but with error
+    # isolation so any failure doesn't affect the 200 response.
+    push_service = WeChatPushService()
+    try:
+        task_service = TaskService(session)
+        intent_service = IntentService(task_service)
+        result = await intent_service.process_message(
+            content or "", from_user
+        )
+
+        if result.reply_text:
+            push_result = await push_service.send_text(
+                openid=from_user, text=result.reply_text
+            )
+            if not push_result.success:
+                logger.warning(
+                    "WeChat push failed for openid=%s: %s",
+                    from_user,
+                    push_result.error,
+                )
+    except Exception as exc:
+        # Log but don't fail the 200 — WeChat expects empty response
+        logger.error("WeChat intent processing error: %s", exc)
+    finally:
+        await push_service.close()
 
     return Response(status_code=200, content="")
 
