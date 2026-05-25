@@ -661,3 +661,223 @@ class TestWebhookTaskFlow:
 
         # Must still return 200 even if push fails
         assert response.status_code == 200
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task creation → WeChat push notification tests
+# ─────────────────────────────────────────────────────────────────────────────
+class TestTaskCreationPush:
+    """Tests for POST /tasks with openid → WeChat push notification.
+
+    When a task is created via the API with an openid field, the handler
+    should trigger a best-effort WeChat push notification with the
+    confirmation template.
+    """
+
+    def _make_mock_task(self, task_id=1, title="Test", priority="HIGH", estimated_hours: float | None = 4.0):
+        """Helper: build a properly configured mock Task."""
+        from datetime import datetime, timezone
+
+        mock_task = MagicMock()
+        mock_task.id = task_id
+        mock_task.title = title
+        mock_task.description = None
+        mock_task.status = "PENDING"
+        mock_task.priority = priority
+        mock_task.estimated_hours = estimated_hours
+        mock_task.created_at = datetime.now(timezone.utc)
+        mock_task.updated_at = datetime.now(timezone.utc)
+        return mock_task
+
+    def _make_mock_service(self, mock_task):
+        """Helper: build a properly configured mock TaskService."""
+        mock_svc = AsyncMock()
+        mock_svc.create = AsyncMock(return_value=mock_task)
+        mock_svc._get_role_ids_for_task = AsyncMock(return_value=[])
+        return mock_svc
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        """Set up and tear down dependency overrides."""
+        from main import app
+        app.dependency_overrides.clear()
+        yield
+        app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_create_task_with_openid_pushes_notification(self):
+        """Test: POST /tasks with openid → push notification sent."""
+        from datetime import datetime, timezone
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from httpx import ASGITransport, AsyncClient
+        from main import app
+        from src.api.handlers.task import get_task_service
+
+        mock_task = self._make_mock_task(
+            task_id=1, title="完成 API 设计", priority="HIGH", estimated_hours=4.0
+        )
+        mock_svc = self._make_mock_service(mock_task)
+        app.dependency_overrides[get_task_service] = lambda: mock_svc
+
+        with patch(
+            "src.services.wechat_push.WeChatPushService"
+        ) as MockPushService:
+            mock_push = AsyncMock()
+            mock_push.send_text.return_value = MagicMock(
+                success=True, msg_id="msg_123", error=None
+            )
+            mock_push.close = AsyncMock()
+            MockPushService.return_value = mock_push
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/tasks",
+                    json={
+                        "title": "完成 API 设计",
+                        "priority": "HIGH",
+                        "estimated_hours": 4.0,
+                        "openid": "oABC123",
+                    },
+                )
+
+            assert response.status_code == 201
+            data = response.json()
+            assert data["title"] == "完成 API 设计"
+            assert data["priority"] == "HIGH"
+
+            # Verify push was called with correct template
+            mock_push.send_text.assert_called_once()
+            call_kwargs = mock_push.send_text.call_args
+            # send_text(openid=..., text=...)
+            if call_kwargs.kwargs:
+                assert call_kwargs.kwargs["openid"] == "oABC123"
+                pushed_text = call_kwargs.kwargs["text"]
+            else:
+                # positional: send_text(openid, text)
+                assert call_kwargs.args[0] == "oABC123"
+                pushed_text = call_kwargs.args[1]
+
+            assert "✅ 任务已创建" in pushed_text
+            assert "完成 API 设计" in pushed_text
+            assert "HIGH" in pushed_text
+            assert "4.0h" in pushed_text
+
+    @pytest.mark.asyncio
+    async def test_create_task_without_openid_no_push(self):
+        """Test: POST /tasks without openid → no push attempted."""
+        from datetime import datetime, timezone
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from httpx import ASGITransport, AsyncClient
+        from main import app
+        from src.api.handlers.task import get_task_service
+
+        mock_task = self._make_mock_task(
+            task_id=2, title="普通任务", priority="MEDIUM", estimated_hours=None
+        )
+        mock_svc = self._make_mock_service(mock_task)
+        app.dependency_overrides[get_task_service] = lambda: mock_svc
+
+        with patch(
+            "src.services.wechat_push.WeChatPushService"
+        ) as MockPushService:
+            mock_push = AsyncMock()
+            mock_push.close = AsyncMock()
+            MockPushService.return_value = mock_push
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/tasks",
+                    json={"title": "普通任务"},
+                )
+
+            assert response.status_code == 201
+            # Push service should NOT have been instantiated
+            MockPushService.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_task_push_failure_still_returns_201(self):
+        """Test: push failure doesn't break the 201 response."""
+        from datetime import datetime, timezone
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from httpx import ASGITransport, AsyncClient
+        from main import app
+        from src.api.handlers.task import get_task_service
+
+        mock_task = self._make_mock_task(
+            task_id=3, title="测试任务", priority="LOW", estimated_hours=2.0
+        )
+        mock_svc = self._make_mock_service(mock_task)
+        app.dependency_overrides[get_task_service] = lambda: mock_svc
+
+        with patch(
+            "src.services.wechat_push.WeChatPushService"
+        ) as MockPushService:
+            mock_push = AsyncMock()
+            mock_push.send_text.return_value = MagicMock(
+                success=False, error="WeChat not configured"
+            )
+            mock_push.close = AsyncMock()
+            MockPushService.return_value = mock_push
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/tasks",
+                    json={
+                        "title": "测试任务",
+                        "openid": "oXYZ789",
+                    },
+                )
+
+            # Must still return 201 even if push fails
+            assert response.status_code == 201
+            data = response.json()
+            assert data["title"] == "测试任务"
+
+    @pytest.mark.asyncio
+    async def test_create_task_push_without_estimated_hours(self):
+        """Test: push message shows '未估算' when no estimated_hours."""
+        from unittest.mock import AsyncMock, patch
+
+        from httpx import ASGITransport, AsyncClient
+        from main import app
+        from src.api.handlers.task import get_task_service
+
+        mock_task = self._make_mock_task(
+            task_id=4, title="无估算任务", priority="MEDIUM", estimated_hours=None
+        )
+        mock_svc = self._make_mock_service(mock_task)
+        app.dependency_overrides[get_task_service] = lambda: mock_svc
+
+        with patch(
+            "src.services.wechat_push.WeChatPushService"
+        ) as MockPushService:
+            mock_push = AsyncMock()
+            mock_push.send_text.return_value = MagicMock(success=True)
+            mock_push.close = AsyncMock()
+            MockPushService.return_value = mock_push
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/tasks",
+                    json={
+                        "title": "无估算任务",
+                        "openid": "oNoHours",
+                    },
+                )
+
+            assert response.status_code == 201
+            mock_push.send_text.assert_called_once()
+            call_kwargs = mock_push.send_text.call_args
+            if call_kwargs.kwargs:
+                pushed_text = call_kwargs.kwargs["text"]
+            else:
+                pushed_text = call_kwargs.args[1]
+
+            assert "未估算" in pushed_text

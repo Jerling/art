@@ -46,6 +46,9 @@ class TaskCreate(BaseModel):
     role_ids: list[int] | None = Field(
         default=None, description="List of role IDs to assign to this task"
     )
+    openid: str | None = Field(
+        default=None, description="WeChat OpenID of the creator — triggers push notification if provided"
+    )
 
 
 class TaskUpdate(BaseModel):

@@ -1,4 +1,5 @@
 """Task CRUD API handler."""
+import logging
 import math
 from typing import Annotated
 
@@ -15,6 +16,8 @@ from src.schemas.task import (
 )
 from src.services.task import TaskService
 from src.storage.database import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -44,13 +47,53 @@ async def create_task(
     data: TaskCreate,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    """Create a new task (optionally assigning roles)."""
+    """Create a new task (optionally assigning roles).
+
+    If ``data.openid`` is set, a WeChat customer-service text message
+    is pushed to that OpenID after the task is created successfully.
+    The push is best-effort — failure does not affect the 201 response.
+    """
     try:
         task = await service.create(data)
         role_ids = await service._get_role_ids_for_task(task.id)
-        return _task_to_response(task, role_ids)
+        response = _task_to_response(task, role_ids)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+    # Best-effort WeChat push notification
+    if data.openid:
+        from src.services.wechat_push import WeChatPushService
+
+        push_service = WeChatPushService()
+        try:
+            hours_str = f"{task.estimated_hours}h" if task.estimated_hours else "未估算"
+            push_text = (
+                f"✅ 任务已创建："
+                f"「{task.title}」"
+                f"\n优先级 {task.priority}"
+                f"，预计 {hours_str}"
+            )
+            push_result = await push_service.send_text(
+                openid=data.openid, text=push_text
+            )
+            if not push_result.success:
+                logger.warning(
+                    "[task_create] WeChat push failed for openid=%s task_id=%d: %s",
+                    data.openid,
+                    task.id,
+                    push_result.error,
+                )
+        except Exception as exc:
+            logger.error(
+                "[task_create] WeChat push error for openid=%s task_id=%d: %s",
+                data.openid,
+                task.id,
+                exc,
+            )
+        finally:
+            await push_service.close()
+
+    return response
 
 
 @router.get("", response_model=PaginatedTasksResponse)
