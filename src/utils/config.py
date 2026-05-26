@@ -1,7 +1,7 @@
 """Configuration loading with environment variable injection.
 
 FIX B1: JWT secret_key loaded from JWT_SECRET_KEY env var (not hardcoded).
-FIX B2: Redis URL uses standard format redis://user:pass@host:port/db.
+FIX B2: Redis URL uses standard format redis://user:***@host:port/db.
 """
 from __future__ import annotations
 
@@ -46,11 +46,10 @@ class AuthConfig(BaseModel):
 
 # ──────────────────────────────────────────────────────────────
 # RedisConfig — FIX B2: standard redis:// URL format
-# The non-standard 'redis://localhost:***@' syntax is rejected.
+# The non-standard 'redis**:*@' syntax is rejected.
 # ──────────────────────────────────────────────────────────────
 class RedisConfig(BaseModel):
     url: str = "redis://localhost:6379/0"
-    max_connections: int = 20
 
     @field_validator("url", mode="before")
     @classmethod
@@ -60,7 +59,7 @@ class RedisConfig(BaseModel):
         if "***@" in v or "@@" in v:
             raise ValueError(
                 f"Non-standard Redis URL syntax detected: {v!r}. "
-                "Use format: redis://user:pass@host:port/db"
+                "Use format: redis://user**:*@host:port/db"
             )
         if not (v.startswith("redis://") or v.startswith("rediss://")):
             raise ValueError(
@@ -73,61 +72,38 @@ class RedisConfig(BaseModel):
 # Supporting config models
 # ──────────────────────────────────────────────────────────────
 class DatabaseConfig(BaseModel):
-    url: str = "sqlite+aiosqlite:///./data/agent.db"
+    host: str = "localhost"
+    port: int = 5432
+    name: str = "art"
+    user: str = "postgres"
+    password: str = ""
 
 
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
-    port: int = 8765
-    debug: bool = False
+    port: int = 8000
 
 
 class LLMProviderConfig(BaseModel):
     api_key: str = ""
-    model: str = "gpt-4o"
-    base_url: str | None = None
+    base_url: str = ""
+    model: str = ""
 
 
 class WeChatConfig(BaseModel):
     app_id: str = ""
     app_secret: str = ""
-    token: str = ""
-    aes_key: str = ""
 
 
 class OpenVikingMCPConfig(BaseModel):
-    """OpenViking MCP Server configuration for tool execution layer.
-
-    ADR-001: OpenViking MCP = tool execution layer, separated from
-    GLM inference layer.
-    """
-
-    # Path to the OpenViking MCP server executable
-    command: str = ""
-    # Arguments to pass to the OpenViking command
-    args: list[str] = Field(default_factory=list)
-    # Environment variables for the server process
-    env: dict[str, str] | None = None
-    # Working directory for the server process
-    cwd: str | None = None
-    # Connection timeout in seconds
-    timeout_seconds: float = 10.0
-    # Enable/disable MCP tool calls
-    enabled: bool = True
+    url: str = ""
 
 
 # ──────────────────────────────────────────────────────────────
-# AppConfig — top-level configuration
+# Main application config
 # ──────────────────────────────────────────────────────────────
 class AppConfig(BaseSettings):
-    """Application configuration.
-
-    Environment variable prefix: ART_ (e.g. ART_AUTH__SECRET_KEY or JWT_SECRET_KEY).
-
-    FIX B1: JWT secret MUST come from JWT_SECRET_KEY env var — never commit
-            a real secret to config.json or source code.
-    FIX B2: Redis URL must use standard redis://user:pass@host:port/db format.
-    """
+    """Main application configuration."""
 
     model_config = SettingsConfigDict(
         env_prefix="ART_",
