@@ -1,10 +1,9 @@
 """Service layer for role-task association operations."""
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from src.models.role import Role
 from src.models.task import Task
@@ -38,6 +37,7 @@ class RoleTaskService:
         # role_tasks table: role_id (FK), task_id (FK), assigned_at
         # We use raw SQL to insert into the junction table directly
         from sqlalchemy import insert
+
         from src.models import Base
 
         # Get the role_tasks table from Base metadata
@@ -76,7 +76,6 @@ class RoleTaskService:
         if not role:
             raise ValueError(f"Role with id {role_id} not found")
 
-        from sqlalchemy import delete
         from src.models import Base
 
         role_tasks_table = Base.metadata.tables["role_tasks"]

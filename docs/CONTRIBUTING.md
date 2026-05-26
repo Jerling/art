@@ -205,6 +205,19 @@ git commit -m "chore: update .env.example with JWT_SECRET"
 git commit -m "fix auth issues and update config"
 ```
 
+### 3.6 Sprint 内 subtask 提交规范
+
+**Sprint 内每个 kanban subtask 完成后单独一个 commit，不得合并。**
+
+| 场景 | 要求 |
+|------|------|
+| Sprint 内 subtask 完成 | 立即 commit，message 标注 task id |
+| 格式 | `feat/fix/chore: [Sprint N] <简短描述> (#<task_id>)` |
+| 示例 | `feat: [Sprint 2] WeChat webhook endpoint (#t_75f6e23e)` |
+| 禁止 | 多个 subtask 合并成一个大 commit 在 Sprint 结束时一起提交 |
+
+**原因**：Code review 难度随 commit 规模指数增长，审 10 个 200 行 commit 比审 1 个 2000 行 commit 效率高得多。
+
 ---
 
 ## 四、CI/CD 流水线

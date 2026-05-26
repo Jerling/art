@@ -200,6 +200,8 @@ class TestB4_IntentDataSchema:
         assert data.action == "create_task"
         assert data.estimated_hours == 2.5
         assert data.confidence == 0.92
+        # Title auto-extracted from raw_text for CREATE_TASK
+        assert data.title == "下周三前完成 API 设计"
 
     def test_intent_data_from_json_string(self):
         from src.domain.intent import parse_intent_data
@@ -207,21 +209,25 @@ class TestB4_IntentDataSchema:
         raw = json.dumps(
             {
                 "action": "create_task",
+                "title": "review PR",
                 "estimated_hours": 3.0,
                 "suggested_priority": "high",
                 "confidence": 0.85,
+                "raw_text": "create task",
             }
         )
         intent = parse_intent_data(raw)
         assert intent.action == "create_task"
         assert intent.estimated_hours == 3.0
         assert intent.suggested_priority == "high"
+        assert intent.title == "review PR"
 
     def test_intent_data_from_dict(self):
         from src.domain.intent import parse_intent_data
 
-        intent = parse_intent_data({"action": "complete_task", "estimated_hours": 0.5})
-        assert intent.action == "complete_task"
+        # complete_task is not in the simplified enum → maps to UNKNOWN
+        intent = parse_intent_data({"action": "query_task", "estimated_hours": 0.5})
+        assert intent.action == "query_task"
         assert intent.estimated_hours == 0.5
 
     def test_intent_data_rejects_invalid_action(self):
@@ -255,7 +261,10 @@ class TestB4_IntentDataSchema:
         assert intent.action == "unknown"
         assert intent.estimated_hours is None
         assert intent.confidence is None
-        assert intent.extra == {}
+        # FIX B4: extra = "forbid" — unknown fields are rejected, no extra dict
+        # Verify that the model does not accept arbitrary extra fields
+        with pytest.raises(Exception):
+            IntentData(unknown_field="should_fail")
 
     def test_parse_intent_data_handles_none(self):
         from src.domain.intent import parse_intent_data
@@ -270,13 +279,15 @@ class TestB4_IntentDataSchema:
             parse_intent_data("not valid json")
 
     def test_intent_data_serializes_to_json(self):
-        from src.domain.intent import IntentData
+        from src.domain.intent import IntentAction, IntentData
 
         data = IntentData(
-            action="create_task",
+            action=IntentAction.CREATE_TASK,
+            title="test task",
             estimated_hours=1.5,
             confidence=0.9,
         )
         serialized = data.model_dump_json()
         assert "create_task" in serialized
+        assert "test task" in serialized
         assert "1.5" in serialized

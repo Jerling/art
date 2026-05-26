@@ -1,5 +1,5 @@
 """Service layer for Role CRUD operations."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.role import Role
 from src.schemas.role import RoleCreate, RoleUpdate
 
-UTC = timezone.utc
+UTC = UTC
 
 
 class RoleService:

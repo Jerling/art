@@ -4,7 +4,6 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.storage.database import async_session_maker
 from src.schemas.role_task import (
     RoleAssignRequest,
     RoleAssignResponse,
@@ -12,6 +11,7 @@ from src.schemas.role_task import (
     TaskBriefResponse,
 )
 from src.services.role_task import RoleTaskService
+from src.storage.database import async_session_maker
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

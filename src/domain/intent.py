@@ -21,12 +21,7 @@ class TaskPriority(str, Enum):
 
 class IntentAction(str, Enum):
     CREATE_TASK = "create_task"
-    UPDATE_TASK = "update_task"
-    ASSIGN_TASK = "assign_task"
-    COMPLETE_TASK = "complete_task"
-    DELETE_TASK = "delete_task"
-    LIST_TASKS = "list_tasks"
-    HELP = "help"
+    QUERY_TASK = "query_task"
     UNKNOWN = "unknown"
 
 
@@ -52,6 +47,11 @@ class IntentData(BaseModel):
     """
 
     action: IntentAction = IntentAction.UNKNOWN
+    title: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Extracted task title from user message. Required when action=CREATE_TASK.",
+    )
     estimated_hours: Annotated[float | None, Field(ge=0, le=168)] = Field(
         default=None,
         description="Estimated hours to complete. Max 1 week (168h).",
@@ -67,8 +67,6 @@ class IntentData(BaseModel):
         max_length=2000,
         description="Original user input text that generated this intent.",
     )
-    # Open field for future extensions — validated but not strict
-    extra: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("suggested_due_date", mode="before")
     @classmethod
@@ -82,19 +80,29 @@ class IntentData(BaseModel):
         raise ValueError(f"Invalid date format: {v!r}")
 
     @model_validator(mode="after")
+    def _validate_create_task_requires_title(self) -> IntentData:
+        """Validate that CREATE_TASK intents include a title."""
+        if self.action == IntentAction.CREATE_TASK and not self.title:
+            # Auto-extract title from raw_text if available (first 100 chars)
+            if self.raw_text:
+                self.title = self.raw_text.strip()[:100]
+            else:
+                raise ValueError("CREATE_TASK requires a title entity")
+        return self
+
+    @model_validator(mode="after")
     def _validate_due_date_not_in_past(self) -> IntentData:
         if self.suggested_due_date is not None:
             if self.suggested_due_date < date.today():
-                # Downgrade to warning rather than rejection for past dates
-                # (allows backfill of historical data)
                 pass
         return self
 
     model_config = {
-        "use_enum_values": True,
+        "extra": "forbid",
         "json_schema_extra": {
             "example": {
                 "action": "create_task",
+                "title": "完成 API Gateway 设计文档",
                 "estimated_hours": 2.5,
                 "suggested_priority": "medium",
                 "suggested_due_date": "2026-06-01",

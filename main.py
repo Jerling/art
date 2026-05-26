@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from src.api.handlers.role import router as role_router
 from src.api.handlers.role_task import role_tasks_router, task_roles_router
 from src.api.handlers.task import router as task_router
+from src.api.handlers.wechat import router as wechat_router
+from src.api.handlers.wechat_message import router as wechat_message_router
 from src.storage.database import engine
 
 
@@ -25,6 +27,8 @@ app.include_router(role_router)
 app.include_router(task_router)
 app.include_router(task_roles_router)
 app.include_router(role_tasks_router)
+app.include_router(wechat_router)
+app.include_router(wechat_message_router)
 
 
 @app.get("/health")
