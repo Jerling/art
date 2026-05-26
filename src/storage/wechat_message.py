@@ -2,7 +2,6 @@
 from datetime import datetime
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_upsert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 

@@ -12,18 +12,22 @@ from src.llm.base import (
 )
 from src.llm.glm import (
     GLMProvider,
-    analyze_intent as glm_analyze_intent,
     get_glm_provider,
 )
+from src.llm.glm import (
+    analyze_intent as glm_analyze_intent,
+)
 from src.llm.intent_parser import (
-    IntentParsingError,
     IntentParser,
+    IntentParsingError,
     get_intent_parser,
 )
 from src.llm.minimax import (
     MiniMaxProvider,
-    analyze_intent as minimax_analyze_intent,
     get_minimax_provider,
+)
+from src.llm.minimax import (
+    analyze_intent as minimax_analyze_intent,
 )
 
 __all__ = [

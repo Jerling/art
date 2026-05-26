@@ -2,12 +2,11 @@
 import math
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 
 from src.storage.database import get_session
 from src.storage.wechat_message import WeChatMessageStore
-
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 

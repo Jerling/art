@@ -1,5 +1,5 @@
 """Service layer for Task CRUD operations."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -9,15 +9,14 @@ from src.models.role import Role
 from src.models.role_task import RoleTask
 from src.models.task import Task
 from src.schemas.task import (
+    VALID_TRANSITIONS,
     TaskCreate,
-    TaskPriority,
     TaskStatus,
     TaskStatusUpdate,
     TaskUpdate,
-    VALID_TRANSITIONS,
 )
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def _naive_dt() -> datetime:

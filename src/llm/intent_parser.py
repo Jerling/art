@@ -13,7 +13,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from src.domain.intent import IntentAction, IntentData, TaskPriority
+from src.domain.intent import IntentAction, IntentData
 from src.llm.base import LLMError
 from src.llm.glm import GLMProvider, get_glm_provider
 
@@ -139,8 +139,9 @@ class IntentParser:
         """Determine log marker from an LLM error or its cause chain."""
         import json
 
-        from src.llm.base import APIError, AuthenticationError, RateLimitError
         import httpx
+
+        from src.llm.base import APIError, AuthenticationError, RateLimitError
 
         if isinstance(exc, RateLimitError):
             return "http_429"
