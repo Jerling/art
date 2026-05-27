@@ -132,7 +132,7 @@ class TaskService:
         # Paginated items
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            base.order_by(Task.id).offset(offset).limit(page_size)
+            base.order_by(Task.id.desc()).offset(offset).limit(page_size)
         )
         items = list(result.scalars().all())
         return items, total
