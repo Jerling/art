@@ -1,9 +1,10 @@
 """Database configuration and session factory."""
+import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-DATABASE_URL = "sqlite+aiosqlite:///./art.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./art.db")
 
 engine = create_async_engine(DATABASE_URL, echo=False, future=True)
 
