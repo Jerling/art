@@ -674,6 +674,7 @@ class TestPushType:
         assert PushType.TASK_CREATED == "TASK_CREATED"
         assert PushType.TASK_ASSIGNED == "TASK_ASSIGNED"
         assert PushType.TASK_COMPLETED == "TASK_COMPLETED"
+        assert PushType.TASK_STATUS_CHANGED == "TASK_STATUS_CHANGED"
 
     def test_push_type_enum_members(self):
-        assert len(PushType) == 3
+        assert len(PushType) == 4

@@ -309,7 +309,7 @@ async def update_task_status(
                 push_result = await push_service.send_text(
                     openid=task_before.openid,
                     text=push_text,
-                    push_type=PushType.TASK_COMPLETED,
+                    push_type=PushType.TASK_STATUS_CHANGED,
                     task_id=task.id,
                 )
             if not push_result.success:
