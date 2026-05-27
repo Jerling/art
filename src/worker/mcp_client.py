@@ -165,6 +165,7 @@ class MCPClient:
         self._session: ClientSession | None = None
         self._stdio_transport: tuple[Any, Any] | None = None
         self._connected: bool = False
+        self._tool_names_cache: set[str] | None = None
 
     # ── Context manager lifecycle ─────────────────────────────────────────────
 
@@ -286,13 +287,18 @@ class MCPClient:
         result = await self._session.list_tools()  # type: ignore[union-attr]
         latency_ms = (time.perf_counter() - start) * 1000
 
+        tools = [ToolInfo.from_mcp_tool(t) for t in result.tools]
+
+        # Cache tool names for O(1) lookups in call_tool
+        self._tool_names_cache = {t.name for t in tools}
+
         logger.debug(
             "list_tools completed in %.2fms, found %d tools",
             latency_ms,
-            len(result.tools),
+            len(tools),
         )
 
-        return [ToolInfo.from_mcp_tool(t) for t in result.tools]
+        return tools
 
     async def call_tool(
         self,
@@ -315,13 +321,19 @@ class MCPClient:
         """
         self._ensure_connected()
 
-        # First verify the tool exists
-        tools = await self.list_tools()
-        tool_names = {t.name for t in tools}
-        if tool_name not in tool_names:
-            raise MCPToolNotFoundError(
-                f"Tool '{tool_name}' not found. Available tools: {tool_names}"
-            )
+        # First verify the tool exists — use cache if available, else fetch
+        if self._tool_names_cache is not None:
+            if tool_name not in self._tool_names_cache:
+                raise MCPToolNotFoundError(
+                    f"Tool '{tool_name}' not found. Cached tools: {self._tool_names_cache}"
+                )
+        else:
+            # First call — populate cache
+            tools = await self.list_tools()
+            if tool_name not in self._tool_names_cache:  # type: ignore[union-attr]
+                raise MCPToolNotFoundError(
+                    f"Tool '{tool_name}' not found. Available tools: {self._tool_names_cache}"
+                )
 
         start = time.perf_counter()
         try:
