@@ -6,7 +6,9 @@ POST /wechat/webhook  — receive encrypted XML message, verify, decrypt, parse
 from __future__ import annotations
 
 import logging
+import time
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
@@ -47,6 +49,34 @@ def _parse_xml_message(xml_body: bytes) -> dict[str, Any]:
     except ET.ParseError as exc:
         logger.warning("Failed to parse WeChat XML message: %s", exc)
         return {}
+
+
+# ─────────────────────────────────────────────────────────────────
+# Rate limiter (per-openid, sliding window)
+# ─────────────────────────────────────────────────────────────────
+
+_RATE_LIMIT_WINDOW_SECONDS: int = 60
+_RATE_LIMIT_MAX_REQUESTS: int = 10
+_rate_limit_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def _is_rate_limited(openid: str) -> bool:
+    """Check if *openid* has exceeded the rate limit (10 requests/minute).
+
+    Returns True if the request should be rejected.
+    """
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW_SECONDS
+
+    # Prune old entries
+    bucket = _rate_limit_buckets[openid]
+    _rate_limit_buckets[openid] = [t for t in bucket if t > window_start]
+
+    if len(_rate_limit_buckets[openid]) >= _RATE_LIMIT_MAX_REQUESTS:
+        return True
+
+    _rate_limit_buckets[openid].append(now)
+    return False
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -170,6 +200,14 @@ async def receive_wechat_message(
     msg_type = msg_dict.get("MsgType", "")
     content = msg_dict.get("Content", "")
     msg_id = msg_dict.get("MsgId", "")
+
+    # ── Rate limiting ────────────────────────────────────────────
+    if from_user and _is_rate_limited(from_user):
+        logger.warning(
+            "WeChat rate limit exceeded for openid=%s — returning 200",
+            from_user,
+        )
+        return Response(status_code=200, content="")
 
     logger.info(
         "WeChat message received: from=%s type=%s content=%r msg_id=%s",
