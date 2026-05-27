@@ -1,6 +1,8 @@
+import time
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -40,11 +42,51 @@ app.include_router(wechat_router)
 app.include_router(wechat_message_router)
 
 
+# ── Prometheus middleware ─────────────────────────────────────────────────────
+
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    """Track request count, latency, and active connections.
+
+    Uses a simple approach: increment active connections on entry,
+    decrement on exit. Records method, endpoint path, and status code.
+    """
+    metrics = _metrics  # local ref for speed
+
+    method = request.method
+    # Use route path pattern (e.g. "/tasks/{id}") when available, else raw path
+    endpoint = request.url.path
+    if request.scope.get("route"):
+        endpoint = request.scope["route"].path or endpoint
+
+    metrics.http_active_connections.inc()
+    start = time.perf_counter()
+    status = "500"  # default if call_next raises before returning
+    try:
+        response = await call_next(request)
+        status = str(response.status_code)
+        return response
+    except Exception:
+        raise
+    finally:
+        elapsed = time.perf_counter() - start
+        metrics.http_requests_total.labels(
+            method=method, endpoint=endpoint, status=status
+        ).inc()
+        metrics.http_request_duration_seconds.labels(
+            method=method, endpoint=endpoint
+        ).observe(elapsed)
+        metrics.http_active_connections.dec()
+
+
+# ── Metrics endpoint ──────────────────────────────────────────────────────────
+
+
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint.
 
-    Exposes all registered Prometheus counters and histograms
+    Exposes all registered Prometheus counters, histograms, and gauges
     in the standard Prometheus text-based exposition format.
     """
     return PlainTextResponse(

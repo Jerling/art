@@ -2,11 +2,15 @@
 
 Provides:
   - GET /health          — basic liveness probe (always returns {"status": "ok"})
-  - GET /health/detailed — detailed readiness probe (DB, Redis, LLM availability)
+  - GET /health/detailed — detailed readiness probe (DB, WeChat API, disk space)
+
+Each dependency check in /health/detailed has a 2-second timeout.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import shutil
 import time
 from typing import Any
 
@@ -15,6 +19,12 @@ from fastapi import APIRouter
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
+
+# Timeout for each individual dependency check (seconds)
+CHECK_TIMEOUT = 2.0
+
+# Minimum free disk space in bytes (100 MB)
+MIN_DISK_FREE_BYTES = 100 * 1024 * 1024
 
 
 # ── Liveness ──────────────────────────────────────────────────────────────────
@@ -39,12 +49,22 @@ async def health_detailed() -> dict[str, Any]:
 
     Checks each downstream dependency and reports its status.
     Returns 200 if all dependencies are healthy, 503 otherwise.
+
+    Checks:
+      - database:    SQLAlchemy engine connectivity (SELECT 1)
+      - wechat_api:  WeChat API endpoint reachability
+      - disk_space:  Available disk space on the data partition
     """
     checks: dict[str, dict[str, Any]] = {}
 
-    checks["database"] = await _check_database()
-    checks["redis"] = await _check_redis()
-    checks["llm"] = await _check_llm()
+    # Run all checks concurrently with individual timeouts
+    db_task = asyncio.create_task(_check_database())
+    wechat_task = asyncio.create_task(_check_wechat_api())
+    disk_task = asyncio.create_task(_check_disk_space())
+
+    checks["database"] = await asyncio.wait_for(db_task, timeout=CHECK_TIMEOUT)
+    checks["wechat_api"] = await asyncio.wait_for(wechat_task, timeout=CHECK_TIMEOUT)
+    checks["disk_space"] = await asyncio.wait_for(disk_task, timeout=CHECK_TIMEOUT)
 
     overall = "ok" if all(c.get("status") == "ok" for c in checks.values()) else "degraded"
 
@@ -66,105 +86,90 @@ async def _check_database() -> dict[str, Any]:
     start = time.perf_counter()
     try:
         async with engine.begin() as conn:
-            await conn.execute(text("SELECT 1"))
+            await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=CHECK_TIMEOUT)
         latency_ms = (time.perf_counter() - start) * 1000
         return {"status": "ok", "latency_ms": round(latency_ms, 2)}
+    except asyncio.TimeoutError:
+        latency_ms = (time.perf_counter() - start) * 1000
+        logger.warning("[health/db] Database check timed out (%.0fms)", latency_ms)
+        return {"status": "error", "latency_ms": round(latency_ms, 2), "error": "timeout"}
     except Exception as exc:
         latency_ms = (time.perf_counter() - start) * 1000
         logger.warning("[health/db] Database check failed: %s", exc)
         return {"status": "error", "latency_ms": round(latency_ms, 2), "error": str(exc)}
 
 
-async def _check_redis() -> dict[str, Any]:
-    """Probe Redis by sending PING."""
-    try:
-        import redis.asyncio as redis
-    except ImportError:
-        return {"status": "error", "error": "redis package not installed"}
+async def _check_wechat_api() -> dict[str, Any]:
+    """Probe WeChat API reachability.
 
-    start = 0.0
-    try:
-        from src.utils.config import get_config
-
-        config = get_config()
-        redis_url = config.redis.url if config.redis else None
-        if not redis_url:
-            return {"status": "ok", "detail": "redis not configured — skipped"}
-
-        start = time.perf_counter()
-        r = redis.from_url(redis_url, socket_timeout=5)
-        try:
-            await r.ping()
-            latency_ms = (time.perf_counter() - start) * 1000
-            return {"status": "ok", "latency_ms": round(latency_ms, 2)}
-        finally:
-            await r.aclose()
-    except Exception as exc:
-        latency_ms = (time.perf_counter() - start) * 1000 if start > 0 else 0
-        logger.warning("[health/redis] Redis check failed: %s", exc)
-        return {"status": "error", "latency_ms": round(latency_ms, 2), "error": str(exc)}
-
-
-async def _check_llm() -> dict[str, Any]:
-    """Probe LLM provider availability via a lightweight API call.
-
-    We check whether the configured LLM provider has a valid API key
-    and can reach the API endpoint. We do NOT make a full completion
-    request — just verify the endpoint is reachable (HTTP 200 or 401/403
-    both mean the service is up; only connection errors mean it's down).
+    We check whether the WeChat API endpoint is reachable by making
+    a lightweight HTTP GET to the token endpoint. We don't need a valid
+    response — just confirming the service is reachable (HTTP 200-499
+    means the service is up; connection errors mean it's down).
     """
     import httpx
 
-    from src.utils.config import get_config
-
     start = 0.0
     try:
-        from src.utils.config import get_config
-
-        config = get_config()
-        provider_name = config.llm_provider or "glm"
-
-        if provider_name == "minimax":
-            from src.llm.minimax import MiniMaxProvider
-
-            provider_cfg = config.minimax
-            base_url = MiniMaxProvider.DEFAULT_BASE_URL
-            api_key = provider_cfg.api_key if provider_cfg else None
-        else:
-            from src.llm.glm import GLMProvider
-
-            provider_cfg = config.glm
-            base_url = GLMProvider.DEFAULT_BASE_URL
-            api_key = provider_cfg.api_key if provider_cfg else None
-
-        if not api_key:
-            return {"status": "ok", "detail": f"{provider_name} API key not set — skipped"}
-
         start = time.perf_counter()
-        async with httpx.AsyncClient(base_url=base_url, timeout=httpx.Timeout(5.0)) as client:
-            resp = await client.get(
-                "/models",
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
+        async with httpx.AsyncClient(
+            base_url="https://api.weixin.qq.com",
+            timeout=httpx.Timeout(CHECK_TIMEOUT),
+        ) as client:
+            # WeChat token endpoint — we don't need valid credentials,
+            # just checking the API is reachable
+            resp = await client.get("/cgi-bin/token", params={
+                "grant_type": "client_credential",
+                "appid": "healthcheck",
+                "secret": "healthcheck",
+            })
         latency_ms = (time.perf_counter() - start) * 1000
 
-        if resp.status_code in (200, 401, 403):
-            return {
-                "status": "ok",
-                "provider": provider_name,
-                "latency_ms": round(latency_ms, 2),
-            }
+        # Any HTTP response (even 4xx/5xx) means the API is reachable
         return {
-            "status": "error",
-            "provider": provider_name,
+            "status": "ok",
             "latency_ms": round(latency_ms, 2),
-            "error": f"unexpected status {resp.status_code}",
         }
+    except httpx.TimeoutException:
+        latency_ms = (time.perf_counter() - start) * 1000 if start > 0 else 0
+        logger.warning("[health/wechat] WeChat API check timed out (%.0fms)", latency_ms)
+        return {"status": "error", "latency_ms": round(latency_ms, 2), "error": "timeout"}
     except httpx.ConnectError as exc:
         latency_ms = (time.perf_counter() - start) * 1000 if start > 0 else 0
-        logger.warning("[health/llm] LLM provider unreachable: %s", exc)
+        logger.warning("[health/wechat] WeChat API unreachable: %s", exc)
         return {"status": "error", "latency_ms": round(latency_ms, 2), "error": str(exc)}
     except Exception as exc:
         latency_ms = (time.perf_counter() - start) * 1000 if start > 0 else 0
-        logger.warning("[health/llm] LLM check failed: %s", exc)
+        logger.warning("[health/wechat] WeChat API check failed: %s", exc)
+        return {"status": "error", "latency_ms": round(latency_ms, 2), "error": str(exc)}
+
+
+async def _check_disk_space() -> dict[str, Any]:
+    """Check available disk space on the data partition."""
+    start = time.perf_counter()
+    try:
+        usage = await asyncio.get_event_loop().run_in_executor(
+            None, shutil.disk_usage, "/"
+        )
+        free_bytes = usage.free
+        total_bytes = usage.total
+        latency_ms = (time.perf_counter() - start) * 1000
+
+        if free_bytes < MIN_DISK_FREE_BYTES:
+            return {
+                "status": "error",
+                "latency_ms": round(latency_ms, 2),
+                "free_bytes": free_bytes,
+                "total_bytes": total_bytes,
+                "error": f"low disk space: {free_bytes} bytes free (minimum {MIN_DISK_FREE_BYTES})",
+            }
+        return {
+            "status": "ok",
+            "latency_ms": round(latency_ms, 2),
+            "free_bytes": free_bytes,
+            "total_bytes": total_bytes,
+        }
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - start) * 1000
+        logger.warning("[health/disk] Disk space check failed: %s", exc)
         return {"status": "error", "latency_ms": round(latency_ms, 2), "error": str(exc)}

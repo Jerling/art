@@ -29,3 +29,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  # ── Redis (optional) ──────────────────────────────────────────────────────────
+  # Uncomment the block below to enable Redis for caching / rate limiting.
+  # The app gracefully degrades when REDIS_URL points to an unreachable host.
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: art-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 5s
+
+volumes:
+  redis_data:
