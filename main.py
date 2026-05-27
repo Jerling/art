@@ -11,6 +11,7 @@ from src.api.handlers.role_task import role_tasks_router, task_roles_router
 from src.api.handlers.task import router as task_router
 from src.api.handlers.wechat import router as wechat_router
 from src.api.handlers.wechat_message import router as wechat_message_router
+from src.api.handlers.admin import router as admin_router
 from src.observability import metrics as _metrics  # noqa: F401 — registers Prometheus metrics
 from src.observability.health import router as health_router
 from src.storage.database import engine
@@ -40,6 +41,7 @@ app.include_router(task_roles_router)
 app.include_router(role_tasks_router)
 app.include_router(wechat_router)
 app.include_router(wechat_message_router)
+app.include_router(admin_router)
 
 
 # ── Prometheus middleware ─────────────────────────────────────────────────────
