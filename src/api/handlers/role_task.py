@@ -1,4 +1,5 @@
 """Role-Task association API handlers."""
+import logging
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,6 +13,8 @@ from src.schemas.role_task import (
 )
 from src.services.role_task import RoleTaskService
 from src.storage.database import async_session_maker
+
+logger = logging.getLogger(__name__)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -32,6 +35,13 @@ async def get_role_task_service(
 task_roles_router = APIRouter(prefix="/tasks", tags=["task-roles"])
 
 
+async def _save_push_log_for_role(session, log) -> None:
+    """Save a push log for role assignment notification."""
+    from src.storage.wechat_push_log import WeChatPushLogStore
+
+    await WeChatPushLogStore(session).save(log)
+
+
 @task_roles_router.post(
     "/{task_id}/roles",
     response_model=RoleAssignResponse,
@@ -42,10 +52,14 @@ async def assign_role_to_task(
     data: RoleAssignRequest,
     service: RoleTaskService = Depends(get_role_task_service),
 ) -> RoleAssignResponse:
-    """Assign a role to a task."""
+    """Assign a role to a task.
+
+    Sends a WeChat push notification to the assigned role's openid
+    if one is configured. The push is best-effort.
+    """
     try:
         role, task, assigned_at = await service.assign_role_to_task(task_id, data.role_id)
-        return RoleAssignResponse(
+        response = RoleAssignResponse(
             role_id=role.id,
             task_id=task.id,
             assigned_at=assigned_at,
@@ -57,6 +71,43 @@ async def assign_role_to_task(
         if "already assigned" in msg.lower():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from e
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg) from e
+
+    # Best-effort WeChat push notification to the assigned role
+    if role.openid:
+        from src.services.wechat_push import WeChatPushService
+
+        # Use a separate session for push log recording
+        async with async_session_maker() as push_session:
+            push_service = WeChatPushService(
+                on_log=lambda log, s=push_session: _save_push_log_for_role(s, log),
+            )
+            try:
+                result = await push_service.send_task_assigned(
+                    openid=role.openid,
+                    task_id=task.id,
+                    task_title=task.title,
+                    role_name=role.name,
+                )
+                if not result.success:
+                    logger.warning(
+                        "[role_assign] WeChat push failed for role %s (openid=%s) task_id=%d: %s",
+                        role.name,
+                        role.openid,
+                        task.id,
+                        result.error,
+                    )
+            except Exception as exc:
+                logger.error(
+                    "[role_assign] WeChat push error for role %s (openid=%s) task_id=%d: %s",
+                    role.name,
+                    role.openid,
+                    task.id,
+                    exc,
+                )
+            finally:
+                await push_service.close()
+
+    return response
 
 
 @task_roles_router.delete(

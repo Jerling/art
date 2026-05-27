@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
+async def _save_push_log(session, log) -> None:
+    """Save a push log record (helper for on_log callback)."""
+    from src.storage.wechat_push_log import WeChatPushLogStore
+
+    await WeChatPushLogStore(session).save(log)
+
+
 async def get_task_service(session: AsyncSession = Depends(get_session)) -> TaskService:
     """Dependency: get TaskService."""
     return TaskService(session)
@@ -39,6 +46,7 @@ def _task_to_response(task, role_ids: list[int]) -> TaskResponse:
         created_at=task.created_at,
         updated_at=task.updated_at,
         role_ids=role_ids,
+        openid=task.openid,
     )
 
 
@@ -62,9 +70,11 @@ async def create_task(
 
     # Best-effort WeChat push notification
     if data.openid:
-        from src.services.wechat_push import WeChatPushService
+        from src.services.wechat_push import PushType, WeChatPushService
 
-        push_service = WeChatPushService()
+        push_service = WeChatPushService(
+            on_log=lambda log: _save_push_log(service.session, log),
+        )
         try:
             hours_str = f"{task.estimated_hours}h" if task.estimated_hours else "未估算"
             push_text = (
@@ -74,7 +84,10 @@ async def create_task(
                 f"，预计 {hours_str}"
             )
             push_result = await push_service.send_text(
-                openid=data.openid, text=push_text
+                openid=data.openid,
+                text=push_text,
+                push_type=PushType.TASK_CREATED,
+                task_id=task.id,
             )
             if not push_result.success:
                 logger.warning(
@@ -92,6 +105,10 @@ async def create_task(
             )
         finally:
             await push_service.close()
+
+    # Best-effort WeChat push to assigned roles
+    if role_ids:
+        await _notify_role_assignments(task, role_ids, service)
 
     return response
 
@@ -141,16 +158,26 @@ async def update_task(
     data: TaskUpdate,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    """Update a task (partial update)."""
+    """Update a task (partial update).
+
+    Assigned roles change notification:
+    Sends WeChat push to all newly assigned role openids.
+    """
     try:
         task = await service.update(task_id, data)
         role_ids = await service._get_role_ids_for_task(task.id)
-        return _task_to_response(task, role_ids)
+        response = _task_to_response(task, role_ids)
     except ValueError as e:
         msg = str(e)
         if "not found" in msg.lower():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg) from e
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from e
+
+    # Best-effort WeChat push to assigned roles when role_ids changed
+    if data.role_ids is not None and role_ids:
+        await _notify_role_assignments(task, role_ids, service)
+
+    return response
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -166,17 +193,94 @@ async def delete_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
 
+def _build_status_push_text(task, old_status: str) -> str:
+    """Build WeChat push text for a task status change."""
+    status_labels = {
+        "PENDING": "待处理",
+        "IN_PROGRESS": "进行中",
+        "DONE": "已完成",
+        "CANCELLED": "已取消",
+    }
+    old_label = status_labels.get(old_status, old_status)
+    new_label = status_labels.get(task.status, task.status)
+    return (
+        f"📋 任务状态更新："
+        f"「{task.title}」"
+        f"\n{old_label} → {new_label}"
+    )
+
+
+async def _notify_role_assignments(
+    task,
+    role_ids: list[int],
+    service: TaskService,
+) -> None:
+    """Send WeChat push to newly assigned roles with push log recording."""
+    if not role_ids:
+        return
+
+    from src.models.role import Role
+    from src.services.wechat_push import PushType, WeChatPushService
+
+    # Load roles to get their openids and names
+    for rid in role_ids:
+        role = await service.session.get(Role, rid)
+        if not role or not role.openid:
+            continue
+
+        push_service = WeChatPushService(
+            on_log=lambda log, s=service.session: _save_push_log(s, log),
+        )
+        try:
+            result = await push_service.send_task_assigned(
+                openid=role.openid,
+                task_id=task.id,
+                task_title=task.title,
+                role_name=role.name,
+            )
+            if not result.success:
+                logger.warning(
+                    "[task_notify] Push to role %s (openid=%s) for task_id=%d failed: %s",
+                    role.name,
+                    role.openid,
+                    task.id,
+                    result.error,
+                )
+        except Exception as exc:
+            logger.error(
+                "[task_notify] Push to role %s (openid=%s) for task_id=%d error: %s",
+                role.name,
+                role.openid,
+                task.id,
+                exc,
+            )
+        finally:
+            await push_service.close()
+
+
 @router.patch("/{task_id}/status", response_model=TaskResponse)
 async def update_task_status(
     task_id: int,
     data: TaskStatusUpdate,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    """Transition a task's status (PENDING→IN_PROGRESS→DONE, or CANCELLED)."""
+    """Transition a task's status (PENDING→IN_PROGRESS→DONE, or CANCELLED).
+
+    Sends a WeChat push notification to the task creator (openid) on status change.
+    """
+    # Fetch task first for push notification (need old status and openid)
+    task_before = await service.get_by_id(task_id)
+    if not task_before:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task with id {task_id} not found",
+        )
+    old_status = task_before.status
+
     try:
         task = await service.update_status(task_id, data)
         role_ids = await service._get_role_ids_for_task(task.id)
-        return _task_to_response(task, role_ids)
+        response = _task_to_response(task, role_ids)
     except ValueError as e:
         msg = str(e)
         if "not found" in msg.lower():
@@ -184,3 +288,45 @@ async def update_task_status(
         if "invalid" in msg.lower() or "transition" in msg.lower():
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg) from e
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from e
+
+    # Best-effort WeChat push notification to creator on status change
+    if task_before.openid:
+        from src.services.wechat_push import PushType, WeChatPushService
+
+        push_service = WeChatPushService(
+            on_log=lambda log: _save_push_log(service.session, log),
+        )
+        try:
+            # Use dedicated methods for specific notification types
+            if data.status.value == "DONE":
+                push_result = await push_service.send_task_completed(
+                    openid=task_before.openid,
+                    task_id=task.id,
+                    task_title=task.title,
+                )
+            else:
+                push_text = _build_status_push_text(task, old_status)
+                push_result = await push_service.send_text(
+                    openid=task_before.openid,
+                    text=push_text,
+                    push_type=PushType.TASK_COMPLETED,
+                    task_id=task.id,
+                )
+            if not push_result.success:
+                logger.warning(
+                    "[task_status] WeChat push failed for openid=%s task_id=%d: %s",
+                    task_before.openid,
+                    task_id,
+                    push_result.error,
+                )
+        except Exception as exc:
+            logger.error(
+                "[task_status] WeChat push error for openid=%s task_id=%d: %s",
+                task_before.openid,
+                task_id,
+                exc,
+            )
+        finally:
+            await push_service.close()
+
+    return response

@@ -254,6 +254,13 @@ async def receive_wechat_message(
 # Background task for intent processing + push
 # ─────────────────────────────────────────────────────────────────
 
+async def _save_push_log_bg(session, log) -> None:
+    """Save a push log record in background context."""
+    from src.storage.wechat_push_log import WeChatPushLogStore
+
+    await WeChatPushLogStore(session).save(log)
+
+
 async def _process_wechat_message_background(
     from_user: str,
     content: str,
@@ -262,6 +269,7 @@ async def _process_wechat_message_background(
 
     This runs as a FastAPI BackgroundTask so it doesn't block the 200 response.
     Includes its own DB session and push service lifecycle.
+    S2 fix: intent processing doesn't block the 200 response.
     """
     from src.storage.database import async_session_maker
 
@@ -273,15 +281,24 @@ async def _process_wechat_message_background(
             result = await intent_service.process_message(content, from_user)
 
             if result.reply_text:
-                push_result = await push_service.send_text(
-                    openid=from_user, text=result.reply_text
+                # Record push log via on_log callback
+                from src.storage.wechat_push_log import WeChatPushLogStore
+
+                push_service_with_log = WeChatPushService(
+                    on_log=lambda log: _save_push_log_bg(session, log),
                 )
-                if not push_result.success:
-                    logger.warning(
-                        "WeChat push failed for openid=%s: %s",
-                        from_user,
-                        push_result.error,
+                try:
+                    push_result = await push_service_with_log.send_text(
+                        openid=from_user, text=result.reply_text
                     )
+                    if not push_result.success:
+                        logger.warning(
+                            "WeChat push failed for openid=%s: %s",
+                            from_user,
+                            push_result.error,
+                        )
+                finally:
+                    await push_service_with_log.close()
     except Exception as exc:
         logger.error("WeChat background intent processing error: %s", exc)
     finally:
