@@ -27,7 +27,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TokenCache:
-    """WeChat access_token cache with automatic expiry."""
+    """WeChat access_token cache with automatic expiry.
+
+    TODO: This in-memory cache is per-process only. For multi-worker
+    deployments (e.g. gunicorn with multiple uvicorn workers), each
+    process will maintain its own cache, causing redundant token
+    refreshes and potential rate limiting by WeChat. Replace with
+    a shared cache (e.g. Redis) in production multi-worker setups.
+    """
     token: str = ""
     expires_at: float = 0.0
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
