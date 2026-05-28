@@ -465,4 +465,48 @@ p {
   color: var(--text);
   font-size: 14px;
 }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .roles-page {
+    padding: 20px 16px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .btn-small {
+    margin-right: 0;
+    flex: 1;
+    text-align: center;
+  }
+
+  th:nth-child(2), td:nth-child(2),
+  th:nth-child(3), td:nth-child(3) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .roles-page {
+    padding: 16px 12px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  th, td {
+    padding: 8px;
+  }
+}
 </style>

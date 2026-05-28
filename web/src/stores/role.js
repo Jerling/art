@@ -3,6 +3,34 @@ import { ref, computed } from 'vue'
 
 const STORAGE_KEY = 'art_current_role_id'
 
+/** Built-in permission groups based on role name conventions */
+const BUILTIN_ROLE_PERMISSIONS = {
+  admin: {
+    name: 'Admin',
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+    canAssign: true,
+    canManageRoles: true,
+  },
+  member: {
+    name: 'Member',
+    canCreate: true,
+    canEdit: true,
+    canDelete: false,
+    canAssign: true,
+    canManageRoles: false,
+  },
+  visitor: {
+    name: 'Visitor',
+    canCreate: false,
+    canEdit: false,
+    canDelete: false,
+    canAssign: false,
+    canManageRoles: false,
+  },
+}
+
 export const useRoleStore = defineStore('role', () => {
   /** @type {import('vue').Ref<number|null>} */
   const currentRoleId = ref(
@@ -18,6 +46,18 @@ export const useRoleStore = defineStore('role', () => {
   const roles = ref([])
 
   const hasRole = computed(() => currentRoleId.value !== null)
+
+  /** Compute permissions from the current role name */
+  const permissions = computed(() => {
+    if (!currentRole.value) return { canCreate: false, canEdit: false, canDelete: false, canAssign: false, canManageRoles: false }
+    const name = (currentRole.value.name || '').toLowerCase()
+    // Match built-in groups first
+    for (const [key, perms] of Object.entries(BUILTIN_ROLE_PERMISSIONS)) {
+      if (name === key) return perms
+    }
+    // Fallback: unknown named roles get Member-level permissions
+    return BUILTIN_ROLE_PERMISSIONS.member
+  })
 
   /**
    * @param {number} id
@@ -49,6 +89,7 @@ export const useRoleStore = defineStore('role', () => {
     currentRole,
     roles,
     hasRole,
+    permissions,
     setCurrentRoleId,
     clearCurrentRole,
     syncCurrentRole,
