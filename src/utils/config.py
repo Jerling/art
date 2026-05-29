@@ -93,6 +93,8 @@ class LLMProviderConfig(BaseModel):
 class WeChatConfig(BaseModel):
     app_id: str = ""
     app_secret: str = ""
+    token: str = ""
+    aes_key: str = ""
 
 
 class OpenVikingMCPConfig(BaseModel):

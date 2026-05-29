@@ -73,6 +73,7 @@ class TaskService:
             description=data.description,
             priority=data.priority.value,
             estimated_hours=data.estimated_hours,
+            openid=data.openid,
         )
         self.session.add(task)
         try:

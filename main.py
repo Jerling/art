@@ -20,10 +20,10 @@ from src.storage.database import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: create tables (idempotent for SQLite)
+    import src.models  # noqa: F401
+    from src.models.task import Task  # noqa: F401
     async with engine.begin() as conn:
-        # Import all models so SQLAlchemy metadata picks them up
-        import src.models  # noqa: F401
-        from src.models.task import Task  # noqa: F401
+        await conn.run_sync(src.models.Base.metadata.create_all)
     yield
     # Shutdown
     await engine.dispose()

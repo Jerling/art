@@ -5,6 +5,7 @@ GET  /api/v1/admin/backup  — list available backups
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -38,7 +39,7 @@ async def trigger_backup(
     from scripts.backup import run_backup
 
     try:
-        result = run_backup(db_path, backup_dir, keep)
+        result = await asyncio.to_thread(run_backup, db_path, backup_dir, keep)
     except FileNotFoundError as exc:
         logger.error("Backup failed: %s", exc)
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -66,7 +67,7 @@ async def list_backups(
     import re
     from datetime import datetime
 
-    BACKUP_RE = re.compile(r"^backup_(\d{8}_\d{8})\.db$")
+    BACKUP_RE = re.compile(r"^backup_(\d{8}_\d{6})\.db$")
     out_dir = Path(backup_dir)
 
     if not out_dir.exists():

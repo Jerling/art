@@ -116,6 +116,7 @@ class TestTaskResponseSchema:
         mock_task.estimated_hours = 3.0
         mock_task.created_at = datetime(2026, 1, 1, 12, 0, 0)
         mock_task.updated_at = datetime(2026, 1, 2, 12, 0, 0)
+        mock_task.openid = None
 
         response = TaskResponse(
             id=1,
@@ -193,6 +194,7 @@ class TestTaskServiceValidation:
         mock_task.deleted_at = None
         mock_task.created_at = datetime.now(timezone.utc)
         mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.openid = None
 
         mock_session.add = MagicMock()
         mock_session.commit = AsyncMock()
@@ -460,6 +462,7 @@ class TestTaskHandlerMocked:
         mock_task.estimated_hours = None
         mock_task.created_at = datetime.now(timezone.utc)
         mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.openid = None
 
         mock_service.create = AsyncMock(return_value=mock_task)
         mock_service._get_role_ids_for_task = AsyncMock(return_value=[1, 2])
@@ -527,9 +530,7 @@ class TestTaskHandlerMocked:
     async def test_update_status_handler_not_found(self, mock_service):
         from src.api.handlers.task import update_task_status
 
-        mock_service.update_status = AsyncMock(
-            side_effect=ValueError("Task with id 999 not found")
-        )
+        mock_service.get_by_id = AsyncMock(return_value=None)
 
         with pytest.raises(HTTPException) as exc_info:
             await update_task_status(
@@ -542,7 +543,12 @@ class TestTaskHandlerMocked:
     @pytest.mark.asyncio
     async def test_update_status_handler_invalid_transition(self, mock_service):
         from src.api.handlers.task import update_task_status
+        from datetime import datetime, timezone
 
+        mock_task_before = MagicMock()
+        mock_task_before.status = "DONE"
+        mock_task_before.openid = None
+        mock_service.get_by_id = AsyncMock(return_value=mock_task_before)
         mock_service.update_status = AsyncMock(
             side_effect=ValueError("Invalid status transition from DONE to PENDING")
         )
@@ -569,6 +575,7 @@ class TestTaskHandlerMocked:
         mock_task.estimated_hours = None
         mock_task.created_at = datetime.now(timezone.utc)
         mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.openid = None
 
         mock_service.list_tasks = AsyncMock(return_value=([mock_task], 1))
         mock_service._get_role_ids_for_task = AsyncMock(return_value=[])

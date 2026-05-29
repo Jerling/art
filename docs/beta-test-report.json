@@ -1,0 +1,100 @@
+{
+  "summary": {
+    "total_tests": 11,
+    "passed": 4,
+    "failed": 7,
+    "pass_rate": "36.4%",
+    "p99_latency_ms": 72.7,
+    "start_time": "2026-05-27T12:31:07.782995",
+    "end_time": null
+  },
+  "results": [
+    {
+      "scenario": "health_check",
+      "passed": true,
+      "latency_ms": 5.78,
+      "detail": "{'status': 'ok'}",
+      "timestamp": "2026-05-27T12:31:07.835753"
+    },
+    {
+      "scenario": "health_detailed",
+      "passed": true,
+      "latency_ms": 72.7,
+      "detail": "db=ok disk=ok",
+      "timestamp": "2026-05-27T12:31:07.908489"
+    },
+    {
+      "scenario": "prometheus_metrics",
+      "passed": true,
+      "latency_ms": 2.93,
+      "detail": "content_length=8854",
+      "timestamp": "2026-05-27T12:31:07.911435"
+    },
+    {
+      "scenario": "wechat_webhook_get",
+      "passed": false,
+      "latency_ms": 24.37,
+      "detail": "status=500",
+      "timestamp": "2026-05-27T12:31:07.935824"
+    },
+    {
+      "scenario": "wechat_webhook_post_plaintext",
+      "passed": false,
+      "latency_ms": 6.95,
+      "detail": "status=422",
+      "timestamp": "2026-05-27T12:31:07.942806"
+    },
+    {
+      "scenario": "task_create",
+      "passed": false,
+      "latency_ms": 2.5,
+      "detail": "status=404",
+      "timestamp": "2026-05-27T12:31:07.945331"
+    },
+    {
+      "scenario": "task_list",
+      "passed": false,
+      "latency_ms": 2.27,
+      "detail": "status=404",
+      "timestamp": "2026-05-27T12:31:07.947619"
+    },
+    {
+      "scenario": "intent_recognition_accuracy",
+      "passed": false,
+      "latency_ms": 2.83,
+      "detail": "accuracy=0.0% (0/15) p99=4.0ms",
+      "timestamp": "2026-05-27T12:31:07.990257"
+    },
+    {
+      "scenario": "edge_cases",
+      "passed": false,
+      "latency_ms": 2.15,
+      "detail": "0/8 passed",
+      "timestamp": "2026-05-27T12:31:08.007507"
+    },
+    {
+      "scenario": "message_latency_p99",
+      "passed": true,
+      "latency_ms": 1.84,
+      "detail": "p50=1.8 p95=2.0 p99=2.0 max=2.0ms",
+      "timestamp": "2026-05-27T12:31:08.044378"
+    },
+    {
+      "scenario": "concurrent_messages",
+      "passed": false,
+      "latency_ms": 15.64,
+      "detail": "0/10 passed",
+      "timestamp": "2026-05-27T12:31:08.064523"
+    }
+  ],
+  "errors": [
+    "Edge case '...' returned 422",
+    "Edge case '   ...' returned 422",
+    "Edge case '你好...' returned 422",
+    "Edge case '帮助...' returned 422",
+    "Edge case '任务...' returned 422",
+    "Edge case '任务 xxxxxxxxxxxxxxxxxxxxxxxxxxx...' returned 422",
+    "Edge case '任务 <script>alert(1)</script>...' returned 422",
+    "Edge case '任务 '; DROP TABLE tasks; --...' returned 422"
+  ]
+}
