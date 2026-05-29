@@ -25,7 +25,13 @@ logger = logging.getLogger("art.backup")
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-DEFAULT_DB_PATH = os.environ.get("DATABASE_PATH", str(Path(__file__).parent.parent / "art.db"))
+DEFAULT_DB_PATH = str(Path(__file__).parent.parent / "art.db")
+_db_url = os.environ.get("DATABASE_URL", "")
+if _db_url:
+    import re
+    _m = re.match(r"sqlite(?:\+aiosqlite)?:///(.+)", _db_url)
+    if _m:
+        DEFAULT_DB_PATH = _m.group(1)
 DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent / "backups")
 DEFAULT_KEEP = 7
 
