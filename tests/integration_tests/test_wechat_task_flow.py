@@ -674,7 +674,7 @@ class TestTaskCreationPush:
     confirmation template.
     """
 
-    def _make_mock_task(self, task_id=1, title="Test", priority="HIGH", estimated_hours: float | None = 4.0):
+    def _make_mock_task(self, task_id=1, title="Test", priority="HIGH", estimated_hours: float | None = 4.0, openid: str | None = "oABC123"):
         """Helper: build a properly configured mock Task."""
         from datetime import datetime, timezone
 
@@ -687,6 +687,7 @@ class TestTaskCreationPush:
         mock_task.estimated_hours = estimated_hours
         mock_task.created_at = datetime.now(timezone.utc)
         mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.openid = openid
         return mock_task
 
     def _make_mock_service(self, mock_task):

@@ -22,6 +22,7 @@ class Task(Base):
         String(20), nullable=False, default="MEDIUM"
     )
     estimated_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    openid: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()

@@ -81,6 +81,7 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     role_ids: list[int] = Field(default_factory=list, description="Assigned role IDs")
+    openid: str | None = Field(default=None, description="WeChat OpenID of the creator")
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,8 +1,8 @@
 """WeChat message signature verification.
 
 FIX B3: WeChatCrypto.verify_signature was a placeholder.
-This module implements the real HMAC-SHA256 signature verification
-as required by the WeChat Server callback API.
+This module implements the real plain SHA1 signature verification
+as required by the WeChat Server callback API (not HMAC-SHA256 or HMAC-SHA1).
 
 WeChat signature verification algorithm (official docs):
   1. Sort token, timestamp, nonce alphabetically
@@ -44,17 +44,10 @@ class WeChatCrypto:
     def token(self, value: str) -> None:
         object.__setattr__(self, "_token", value)
 
-    def _sha1(self, data: str) -> str:
+    @staticmethod
+    def _sha1(data: str) -> str:
         """Return the SHA1 hex digest of data."""
         return hashlib.sha1(data.encode("utf-8")).hexdigest()
-
-    def _sha1_hmac(self, data: str, key: str) -> str:
-        """Return HMAC-SHA1 of data using key, as a hex string."""
-        return hmac.new(
-            key.encode("utf-8"),
-            data.encode("utf-8"),
-            hashlib.sha1,
-        ).hexdigest()
 
     def verify_signature(
         self,
@@ -72,7 +65,7 @@ class WeChatCrypto:
           sha1(token + timestamp + nonce [+ encrypt])
 
         FIX B3: This was a placeholder returning True unconditionally.
-        Real implementation performs proper HMAC-SHA1 comparison.
+        Real implementation performs proper plain SHA1 comparison.
 
         Args:
             signature: The signature string from WeChat (msg_signature param).

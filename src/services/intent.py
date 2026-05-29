@@ -147,7 +147,7 @@ class IntentService:
         self, intent: IntentData, openid: str
     ) -> IntentResult:
         """Create a task from a CREATE_TASK intent and build the reply."""
-        task_data = self._build_task_create(intent)
+        task_data = self._build_task_create(intent, openid=openid)
 
         try:
             task = await self._task_service.create(task_data)
@@ -194,7 +194,7 @@ class IntentService:
         reply = "无法理解，请换一种说法。例如：'明天完成 API 设计' 或 '下周三前提交报告'。"
         return IntentResult(intent=intent, reply_text=reply)
 
-    def _build_task_create(self, intent: IntentData) -> TaskCreate:
+    def _build_task_create(self, intent: IntentData, openid: str | None = None) -> TaskCreate:
         """Convert an IntentData to a TaskCreate schema."""
         priority = None
         if intent.suggested_priority:
@@ -207,6 +207,7 @@ class IntentService:
             description=intent.raw_text,
             priority=priority or TaskPriority.MEDIUM,
             estimated_hours=intent.estimated_hours,
+            openid=openid,
         )
 
     @staticmethod

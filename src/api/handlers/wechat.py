@@ -6,10 +6,12 @@ POST /wechat/webhook  — receive encrypted XML message, verify, decrypt, parse
 from __future__ import annotations
 
 import logging
+import time
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +49,34 @@ def _parse_xml_message(xml_body: bytes) -> dict[str, Any]:
     except ET.ParseError as exc:
         logger.warning("Failed to parse WeChat XML message: %s", exc)
         return {}
+
+
+# ─────────────────────────────────────────────────────────────────
+# Rate limiter (per-openid, sliding window)
+# ─────────────────────────────────────────────────────────────────
+
+_RATE_LIMIT_WINDOW_SECONDS: int = 60
+_RATE_LIMIT_MAX_REQUESTS: int = 10
+_rate_limit_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def _is_rate_limited(openid: str) -> bool:
+    """Check if *openid* has exceeded the rate limit (10 requests/minute).
+
+    Returns True if the request should be rejected.
+    """
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW_SECONDS
+
+    # Prune old entries
+    bucket = _rate_limit_buckets[openid]
+    _rate_limit_buckets[openid] = [t for t in bucket if t > window_start]
+
+    if len(_rate_limit_buckets[openid]) >= _RATE_LIMIT_MAX_REQUESTS:
+        return True
+
+    _rate_limit_buckets[openid].append(now)
+    return False
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -111,6 +141,7 @@ async def verify_wechat_webhook(
 )
 async def receive_wechat_message(
     request: Request,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     msg_signature: str = Query(..., alias="msg_signature", description="Message signature"),
     timestamp: str = Query(..., description="Unix timestamp"),
@@ -119,7 +150,8 @@ async def receive_wechat_message(
 ) -> Response:
     """Handle POST /wechat/webhook — verify, decrypt, and parse the message.
 
-    WeChat expects an empty 200 response after processing.
+    WeChat expects an empty 200 response immediately, so the
+    intent processing and push happen in a BackgroundTask.
     """
     crypto = _build_crypto()
 
@@ -154,10 +186,6 @@ async def receive_wechat_message(
 
     # ── Decrypt and parse message ───────────────────────────────
     if encrypt_type == "aes" and encrypt_value:
-        # Decrypt the encrypted message using AES-256-CBC
-        # crypto.get_echo_str() returns the decrypted content for the echostr;
-        # for a general encrypted message we use the same AES logic but
-        # extract the msg portion differently.
         decrypted_xml = _decrypt_encrypted_msg(encrypt_value, timestamp, nonce)
         if not decrypted_xml:
             logger.warning("WeChat message decryption failed")
@@ -173,6 +201,14 @@ async def receive_wechat_message(
     content = msg_dict.get("Content", "")
     msg_id = msg_dict.get("MsgId", "")
 
+    # ── Rate limiting ────────────────────────────────────────────
+    if from_user and _is_rate_limited(from_user):
+        logger.warning(
+            "WeChat rate limit exceeded for openid=%s — returning 200",
+            from_user,
+        )
+        return Response(status_code=200, content="")
+
     logger.info(
         "WeChat message received: from=%s type=%s content=%r msg_id=%s",
         from_user,
@@ -181,11 +217,10 @@ async def receive_wechat_message(
         msg_id,
     )
 
-    # ── Persist message to DB (signature already verified by this point) ──
+    # ── Persist message to DB ──────────────────────────────────
     from datetime import datetime
     try:
         store = WeChatMessageStore(session)
-        # WeChat CreateTime is a Unix timestamp string
         create_time_str = msg_dict.get("CreateTime", "")
         if create_time_str and create_time_str.isdigit():
             create_time_dt = datetime.fromtimestamp(int(create_time_str))
@@ -203,39 +238,71 @@ async def receive_wechat_message(
         )
         logger.info("WeChat message persisted: msg_id=%s", msg_id)
     except Exception as exc:
-        # Log but don't fail the 200 — WeChat expects empty response
         logger.error("Failed to persist WeChat message: %s", exc)
 
-    # ── Intent processing + WeChat push ──────────────────────────
-    # WeChat expects an empty 200 response immediately, so the
-    # intent processing and push happen after we've already committed
-    # the message to the DB. We do it synchronously but with error
-    # isolation so any failure doesn't affect the 200 response.
-    push_service = WeChatPushService()
-    try:
-        task_service = TaskService(session)
-        intent_service = IntentService(task_service)
-        result = await intent_service.process_message(
-            content or "", from_user
-        )
-
-        if result.reply_text:
-            push_result = await push_service.send_text(
-                openid=from_user, text=result.reply_text
-            )
-            if not push_result.success:
-                logger.warning(
-                    "WeChat push failed for openid=%s: %s",
-                    from_user,
-                    push_result.error,
-                )
-    except Exception as exc:
-        # Log but don't fail the 200 — WeChat expects empty response
-        logger.error("WeChat intent processing error: %s", exc)
-    finally:
-        await push_service.close()
+    # ── Schedule intent processing + push in background ─────────
+    background_tasks.add_task(
+        _process_wechat_message_background,
+        from_user=from_user,
+        content=content or "",
+    )
 
     return Response(status_code=200, content="")
+
+
+# ─────────────────────────────────────────────────────────────────
+# Background task for intent processing + push
+# ─────────────────────────────────────────────────────────────────
+
+async def _save_push_log_bg(session, log) -> None:
+    """Save a push log record in background context."""
+    from src.storage.wechat_push_log import WeChatPushLogStore
+
+    await WeChatPushLogStore(session).save(log)
+
+
+async def _process_wechat_message_background(
+    from_user: str,
+    content: str,
+) -> None:
+    """Process WeChat message intent and send push reply in the background.
+
+    This runs as a FastAPI BackgroundTask so it doesn't block the 200 response.
+    Includes its own DB session and push service lifecycle.
+    S2 fix: intent processing doesn't block the 200 response.
+    """
+    from src.storage.database import async_session_maker
+
+    push_service = WeChatPushService()
+    try:
+        async with async_session_maker() as session:
+            task_service = TaskService(session)
+            intent_service = IntentService(task_service)
+            result = await intent_service.process_message(content, from_user)
+
+            if result.reply_text:
+                # Record push log via on_log callback
+                from src.storage.wechat_push_log import WeChatPushLogStore
+
+                push_service_with_log = WeChatPushService(
+                    on_log=lambda log: _save_push_log_bg(session, log),
+                )
+                try:
+                    push_result = await push_service_with_log.send_text(
+                        openid=from_user, text=result.reply_text
+                    )
+                    if not push_result.success:
+                        logger.warning(
+                            "WeChat push failed for openid=%s: %s",
+                            from_user,
+                            push_result.error,
+                        )
+                finally:
+                    await push_service_with_log.close()
+    except Exception as exc:
+        logger.error("WeChat background intent processing error: %s", exc)
+    finally:
+        await push_service.close()
 
 
 # ─────────────────────────────────────────────────────────────────

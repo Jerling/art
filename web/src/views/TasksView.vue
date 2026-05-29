@@ -270,7 +270,10 @@ onMounted(async () => {
       <!-- Header -->
       <div class="page-header">
         <h1>Tasks <span class="count-badge">{{ tasks.length }}</span></h1>
-        <button class="btn-primary" @click="openCreate">+ New Task</button>
+        <div class="header-actions">
+          <router-link to="/tasks/kanban" class="btn-outline">Kanban Board</router-link>
+          <button class="btn-primary" @click="openCreate">+ New Task</button>
+        </div>
       </div>
 
       <!-- Messages -->
@@ -764,6 +767,30 @@ onMounted(async () => {
   color: var(--text);
   line-height: 1;
   padding: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-outline {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-outline:hover {
+  background: var(--social-bg);
+  color: var(--text-h);
 }
 
 .empty {

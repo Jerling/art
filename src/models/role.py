@@ -15,6 +15,8 @@ class Role(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # WeChat OpenID of the role holder — used for push notifications
+    openid: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
