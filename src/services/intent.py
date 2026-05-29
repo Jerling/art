@@ -10,13 +10,16 @@ and handles the decision logic:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from src.domain.intent import IntentAction, IntentData
 from src.llm.base import LLMError
 from src.llm.glm import analyze_intent
 from src.schemas.task import TaskCreate, TaskPriority
 from src.services.task import TaskService
+
+if TYPE_CHECKING:
+    from src.llm.glm import GLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +93,7 @@ class IntentService:
         message: str,
         openid: str,
         *,
-        provider: Any = None,
+        provider: GLMProvider | None = None,
     ) -> IntentResult:
         """Process a user message through the full intent pipeline.
 
@@ -114,7 +117,7 @@ class IntentService:
             return self._handle_unknown(intent, openid)
 
     async def _safe_parse_intent(
-        self, message: str, *, provider: Any = None
+        self, message: str, *, provider: GLMProvider | None = None
     ) -> IntentData:
         """Parse intent with exception isolation.
 

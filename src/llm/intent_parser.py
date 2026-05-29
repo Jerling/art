@@ -100,7 +100,7 @@ class IntentParser:
         """
         if self._provider is None:
             raise RuntimeError(
-                "IntentParser: no MiniMax provider set. "
+                "IntentParser: no GLM provider set. "
                 "Pass provider=... to the constructor, or use get_intent_parser()."
             )
         return self._provider

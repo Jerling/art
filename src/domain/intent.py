@@ -9,7 +9,11 @@ from datetime import date
 from enum import Enum
 from typing import Annotated, Any
 
+import logging
+
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 class TaskPriority(str, Enum):
@@ -94,7 +98,11 @@ class IntentData(BaseModel):
     def _validate_due_date_not_in_past(self) -> IntentData:
         if self.suggested_due_date is not None:
             if self.suggested_due_date < date.today():
-                pass
+                logger.warning(
+                    "Suggested due_date %s is in the past, clearing",
+                    self.suggested_due_date,
+                )
+                self.suggested_due_date = None
         return self
 
     model_config = {

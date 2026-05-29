@@ -28,7 +28,7 @@ class WeChatMessage(Base):
     to_user: Mapped[str] = mapped_column(String(100), nullable=False)
     msg_type: Mapped[str] = mapped_column(String(50), nullable=False, default="text")
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    msg_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    msg_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     create_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     raw_xml: Mapped[str | None] = mapped_column(Text, nullable=True)
 
