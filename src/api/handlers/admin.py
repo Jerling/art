@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
@@ -16,7 +18,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 # Default paths — can be overridden via query params for flexibility
-DEFAULT_DB_PATH = str(Path(__file__).parent.parent.parent.parent / "art.db")
+# Derive DB path from DATABASE_URL env var to stay consistent with backup.py
+_default_db_path = str(Path(__file__).parent.parent.parent.parent / "art.db")
+_db_url = os.environ.get("DATABASE_URL", "")
+if _db_url:
+    _m = re.match(r"sqlite(?:\+aiosqlite)?:///(.+)", _db_url)
+    if _m:
+        _default_db_path = _m.group(1)
+DEFAULT_DB_PATH = _default_db_path
 DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent.parent.parent / "backups")
 DEFAULT_KEEP = 7
 
