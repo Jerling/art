@@ -87,20 +87,28 @@ class RateLimiter:
         self._last_refill = time.monotonic()
 
     async def acquire(self) -> None:
-        """Acquire a token, waiting if necessary."""
-        async with self._lock:
-            now = time.monotonic()
-            elapsed = now - self._last_refill
-            self._tokens = min(self.max_tokens, self._tokens + elapsed * self.refill_rate)
-            self._last_refill = now
+        """Acquire a token, waiting if necessary.
 
-            if self._tokens < 1.0:
+        Uses a retry-loop that yields the lock between attempts so other
+        concurrent acquire() calls are not blocked during wait periods.
+        """
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                elapsed = now - self._last_refill
+                self._tokens = min(self.max_tokens, self._tokens + elapsed * self.refill_rate)
+                self._last_refill = now
+
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return
+
+                # Compute how long to wait for the next token
                 wait_time = (1.0 - self._tokens) / self.refill_rate
-                logger.debug("[wechat_push] rate limiter: waiting %.2fs", wait_time)
-                await asyncio.sleep(wait_time)
-                self._tokens = 0.0
-            else:
-                self._tokens -= 1.0
+
+            # Lock released — safe to sleep without blocking other acquire() calls
+            # Cap to 0.05s so we yield the lock regularly and don't starve others
+            await asyncio.sleep(min(wait_time, 0.05))
 
 
 _rate_limiter = RateLimiter()
