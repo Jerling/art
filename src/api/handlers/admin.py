@@ -17,16 +17,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
-# Default paths — can be overridden via query params for flexibility
-# Derive DB path from DATABASE_URL env var to stay consistent with backup.py
-_default_db_path = str(Path(__file__).parent.parent.parent.parent / "art.db")
+# Default paths — derive DB location from DATABASE_URL, fall back to Docker-compatible default
+# Docker volume maps ./data → /app/data, so the real DB is at /app/data/art.db
+_default_db_path = str(Path(__file__).parent.parent.parent.parent / "data" / "art.db")
 _db_url = os.environ.get("DATABASE_URL", "")
 if _db_url:
     _m = re.match(r"sqlite(?:\+aiosqlite)?:///(.+)", _db_url)
     if _m:
-        _default_db_path = _m.group(1)
+        # Resolve relative paths (e.g. "./data/art.db") to absolute
+        _default_db_path = str(Path(_m.group(1)).resolve())
 DEFAULT_DB_PATH = _default_db_path
-DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent.parent.parent / "backups")
+DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent.parent.parent / "data" / "backups")
 DEFAULT_KEEP = 7
 
 
