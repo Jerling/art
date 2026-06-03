@@ -589,10 +589,15 @@ class TestTaskHandlerHTTP:
     """Test task HTTP endpoints via FastAPI TestClient."""
 
     @pytest.fixture
-    def client(self):
+    def valid_token(self) -> str:
+        from src.utils.security import create_access_token
+        return create_access_token({"sub": "test-user"})
+
+    @pytest.fixture
+    def client(self, valid_token):
         from fastapi.testclient import TestClient
         from main import app
-        return TestClient(app)
+        return TestClient(app, headers={"Authorization": f"Bearer {valid_token}"})
 
     def test_create_task(self, client):
         r = client.post("/tasks", json={"title": "Test task"})
@@ -698,8 +703,11 @@ class TestTaskHandlerHTTP:
         assert task_id in done_ids
 
     def test_filter_tasks_by_role_id(self, client):
+        import uuid
+        role_name = f"Dev-{uuid.uuid4().hex[:8]}"
         # Create role first
-        rc = client.post("/roles", json={"name": "Dev"})
+        rc = client.post("/roles", json={"name": role_name})
+        assert rc.status_code == 201, f"Role creation failed: {rc.text[:300]}"
         role_id = rc.json()["id"]
         # Create task with role
         cr = client.post("/tasks", json={"title": "Role filtered", "role_ids": [role_id]})

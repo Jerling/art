@@ -11,11 +11,13 @@ import os
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from src.utils.security import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(require_auth)])
 
 # Default paths — derive DB location from DATABASE_URL, fall back to Docker-compatible default
 # Docker volume maps ./data → /app/data, so the real DB is at /app/data/art.db

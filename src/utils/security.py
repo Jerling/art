@@ -1,4 +1,4 @@
-"""Security utilities: JWT token handling and password hashing.
+"""Security utilities: JWT token handling, password hashing, and FastAPI auth dependency.
 
 FIX B1: JWT tokens expire in 24 hours (was 720h which is too long for MVP).
         secret_key is loaded from JWT_SECRET_KEY env var via config.py.
@@ -6,14 +6,56 @@ FIX B1: JWT tokens expire in 24 hours (was 720h which is too long for MVP).
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any
 
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from .config import get_config
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ── JWT auth dependency ─────────────────────────────────────────────────────────
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def require_auth(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)] = None,
+) -> dict[str, Any]:
+    """FastAPI dependency: verify JWT bearer token on protected endpoints.
+
+    Extracts the token from the ``Authorization: Bearer <token>`` header,
+    decodes and validates it via :func:`decode_access_token`.
+
+    Returns
+    -------
+    dict[str, Any]
+        The decoded token payload (e.g. ``{"sub": "user_id", ...}``) so
+        handlers can inspect caller identity if needed.
+
+    Raises
+    ------
+    HTTPException 401
+        Generic error — never reveals token content or stack traces.
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        payload = decode_access_token(credentials.credentials)
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 # ──────────────────────────────────────────────────────────────

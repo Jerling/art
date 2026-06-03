@@ -336,6 +336,11 @@ class TestRoleAPIHandlers:
     """Test Role API endpoints using mocked service."""
 
     @pytest.fixture
+    def valid_token(self) -> str:
+        from src.utils.security import create_access_token
+        return create_access_token({"sub": "test-user"})
+
+    @pytest.fixture
     def mock_service(self):
         return AsyncMock()
 
@@ -347,7 +352,7 @@ class TestRoleAPIHandlers:
         session.refresh = AsyncMock()
         return session
 
-    def test_create_role_endpoint_returns_422_on_empty_name(self):
+    def test_create_role_endpoint_returns_422_on_empty_name(self, valid_token):
         """POST /roles with empty name returns 422."""
         from fastapi.testclient import TestClient
 
@@ -355,10 +360,14 @@ class TestRoleAPIHandlers:
             from main import app
 
             client = TestClient(app, raise_server_exceptions=False)
-            response = client.post("/roles", json={"name": ""})
+            response = client.post(
+                "/roles",
+                json={"name": ""},
+                headers={"Authorization": f"Bearer {valid_token}"},
+            )
             assert response.status_code == 422
 
-    def test_roles_endpoint_exists(self):
+    def test_roles_endpoint_exists(self, valid_token):
         """GET /roles returns 200 (or 500 if DB not initialized)."""
         from fastapi.testclient import TestClient
 
@@ -366,11 +375,11 @@ class TestRoleAPIHandlers:
             from main import app
 
             client = TestClient(app, raise_server_exceptions=False)
+            response = client.get("/roles", headers={"Authorization": f"Bearer {valid_token}"})
             # Will 500 if DB not initialized (lifespan startup needed), but route exists
-            response = client.get("/roles")
             assert response.status_code in (200, 500)
 
-    def test_get_role_endpoint_returns_404_for_missing(self):
+    def test_get_role_endpoint_returns_404_for_missing(self, valid_token):
         """GET /roles/{id} returns 404 for non-existent role."""
         from fastapi.testclient import TestClient
 
@@ -384,7 +393,10 @@ class TestRoleAPIHandlers:
                 from main import app
 
                 client = TestClient(app, raise_server_exceptions=False)
-                response = client.get("/roles/99999")
+                response = client.get(
+                    "/roles/99999",
+                    headers={"Authorization": f"Bearer {valid_token}"},
+                )
                 assert response.status_code == 404
 
     def test_pagination_calculation(self):
