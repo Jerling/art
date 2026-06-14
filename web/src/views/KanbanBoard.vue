@@ -5,6 +5,7 @@ import { useRoleStore } from '../stores/role.js'
 import { useTaskStore } from '../stores/task.js'
 import { listTasks, createTask, updateTask, deleteTask, updateTaskStatus, setTaskRoles } from '../api/tasks.js'
 import { listRoles } from '../api/roles.js'
+import { canTransition, nextStatuses } from '../utils/permissions.js'
 
 const router = useRouter()
 const roleStore = useRoleStore()
@@ -36,13 +37,7 @@ const PRIORITY_COLORS = {
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
 
-/** Valid transitions: prevents skipping states */
-const VALID_TRANSITIONS = {
-  PENDING: ['IN_PROGRESS', 'CANCELLED'],
-  IN_PROGRESS: ['PENDING', 'DONE', 'CANCELLED'],
-  DONE: ['IN_PROGRESS'],
-  CANCELLED: ['PENDING'],
-}
+// Valid transitions are defined in ../utils/permissions.js (shared with TasksView).
 
 // ── State ────────────────────────────────────────────────────────────────
 const tasks = ref([])
@@ -136,9 +131,7 @@ function onDragLeave(event, status) {
 
 function canDrop(task, targetStatus) {
   if (!task) return false
-  if (task.status === targetStatus) return false
-  const allowed = VALID_TRANSITIONS[task.status] || []
-  return allowed.includes(targetStatus)
+  return canTransition(task.status, targetStatus, roleStore.currentRole?.name)
 }
 
 async function onDrop(event, targetStatus) {
@@ -330,9 +323,19 @@ const canDeleteTask = computed(() => roleStore.permissions.canDelete)
 const isReadOnly = computed(() => !roleStore.permissions.canEdit && !roleStore.permissions.canCreate)
 
 // ── Init ─────────────────────────────────────────────────────────────────
-onMounted(() => {
-  fetchRoles()
-  fetchTasks()
+onMounted(async () => {
+  // Make sure roleStore is hydrated so permissions/currentRole are known
+  // before we render columns or react to drags.
+  try {
+    await roleStore.ensureLoaded()
+  } catch (e) {
+    console.warn('Failed to load roles for Kanban:', e.message)
+  }
+  await fetchTasks()
+  // Backfill tasks with full role objects (mirrors old fetchRoles behaviour)
+  if (!allRoles.value.length && roleStore.roles.length) {
+    allRoles.value = roleStore.roles
+  }
 })
 </script>
 
@@ -386,10 +389,10 @@ onMounted(() => {
       </transition-group>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="kanban-loading">
+    <!-- Loading (initial role hydration OR tasks fetch) -->
+    <div v-if="!roleStore.loaded || loading" class="kanban-loading">
       <div class="loading-spinner"></div>
-      <span>Loading tasks…</span>
+      <span>{{ !roleStore.loaded ? 'Loading roles…' : 'Loading tasks…' }}</span>
     </div>
 
     <!-- Kanban columns -->

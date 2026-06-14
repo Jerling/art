@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoleStore } from '../stores/role.js'
 import { useTaskStore } from '../stores/task.js'
 import { listTasks, createTask, updateTask, deleteTask, updateTaskStatus } from '../api/tasks.js'
+import { canTransition, nextStatuses, isReadOnly } from '../utils/permissions.js'
 
 const roleStore = useRoleStore()
 const taskStore = useTaskStore()
@@ -25,14 +26,7 @@ const confirmDelete = ref(null)
 const editingTask = ref(null)
 const showEditModal = ref(false)
 
-// Status transition map
-const NEXT_STATUSES = {
-  PENDING: ['IN_PROGRESS', 'CANCELLED'],
-  IN_PROGRESS: ['DONE', 'CANCELLED'],
-  DONE: [],
-  CANCELLED: [],
-}
-
+// Status color/priority maps (visual only — transition logic is in utils/permissions)
 const STATUS_COLORS = {
   PENDING: { bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' },
   IN_PROGRESS: { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6' },
@@ -65,11 +59,19 @@ function resetForm() {
 }
 
 function openCreate() {
+  if (!roleStore.permissions.canCreate) {
+    flashError('Your role does not have permission to create tasks.')
+    return
+  }
   resetForm()
   showCreateModal.value = true
 }
 
 function openEdit(task) {
+  if (!roleStore.permissions.canEdit) {
+    flashError('Your role does not have permission to edit tasks.')
+    return
+  }
   editingTask.value = task
   form.value = {
     title: task.title,
@@ -98,6 +100,13 @@ function clearMessages() {
   successMsg.value = null
 }
 
+function flashError(message) {
+  error.value = message
+  setTimeout(() => {
+    if (error.value === message) error.value = null
+  }, 4000)
+}
+
 // ── Role filter ───────────────────────────────────────────────────────────────
 const roleFilterLabel = computed(() => {
   if (filterRoleId.value === null) return 'All Tasks'
@@ -119,6 +128,13 @@ function toggleRoleInForm(roleId) {
   }
 }
 
+// ── Permission helpers for status switcher ───────────────────────────────────
+function legalNextStatuses(task) {
+  return nextStatuses(task.status).filter((s) =>
+    canTransition(task.status, s, roleStore.currentRole?.name)
+  )
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function fetchTasks() {
   loading.value = true
@@ -135,6 +151,10 @@ async function fetchTasks() {
 }
 
 async function submitCreate() {
+  if (!roleStore.permissions.canCreate) {
+    flashError('Your role does not have permission to create tasks.')
+    return
+  }
   formLoading.value = true
   formError.value = null
   try {
@@ -159,6 +179,10 @@ async function submitCreate() {
 }
 
 async function submitEdit() {
+  if (!roleStore.permissions.canEdit) {
+    flashError('Your role does not have permission to edit tasks.')
+    return
+  }
   formLoading.value = true
   formError.value = null
   try {
@@ -184,6 +208,14 @@ async function submitEdit() {
 }
 
 async function switchStatus(task, newStatus) {
+  if (!roleStore.permissions.canEdit) {
+    flashError('Your role does not have permission to change task status.')
+    return
+  }
+  if (!canTransition(task.status, newStatus, roleStore.currentRole?.name)) {
+    flashError(`Cannot move task from ${task.status} to ${newStatus}.`)
+    return
+  }
   try {
     const updated = await updateTaskStatus(task.id, newStatus)
     const idx = tasks.value.findIndex((t) => t.id === updated.id)
@@ -197,43 +229,54 @@ async function switchStatus(task, newStatus) {
   }
 }
 
-async function requestDelete(task) {
+function requestDelete(task) {
+  if (!roleStore.permissions.canDelete) {
+    flashError('Your role does not have permission to delete tasks.')
+    return
+  }
   confirmDelete.value = task.id
 }
 
-async function cancelDelete() {
+function cancelDelete() {
   confirmDelete.value = null
 }
 
 async function confirmDeleteTask() {
+  if (!roleStore.permissions.canDelete) {
+    flashError('Your role does not have permission to delete tasks.')
+    confirmDelete.value = null
+    return
+  }
   const id = confirmDelete.value
-  confirmDelete.value = null
   try {
     await deleteTask(id)
+    confirmDelete.value = null
     tasks.value = tasks.value.filter((t) => t.id !== id)
     taskStore.removeTask(id)
     successMsg.value = 'Task deleted.'
     setTimeout(() => { successMsg.value = null }, 3000)
   } catch (e) {
     error.value = e.message
+    confirmDelete.value = null
   }
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  // Ensure roles are loaded
-  if (!roleStore.roles.length) {
+  // Load roles once; permission checks depend on this.
+  if (!roleStore.loaded) {
     try {
-      const data = await listTasks({ page: 1, page_size: 1 })
-      // roles might be loaded separately — trigger roles fetch from role store
-      await roleStore.syncCurrentRole()
-    } catch (_) {}
+      await roleStore.fetchRoles()
+    } catch (e) {
+      // Non-fatal: tasks page still works, just with no role-scoped filter.
+      console.warn('Failed to load roles:', e.message)
+    }
   }
-  await fetchTasks()
   // Sync current role from store into filter
   if (roleStore.currentRoleId !== null) {
     filterRoleId.value = roleStore.currentRoleId
   }
+  await fetchTasks()
 })
 </script>
 
@@ -272,8 +315,18 @@ onMounted(async () => {
         <h1>Tasks <span class="count-badge">{{ tasks.length }}</span></h1>
         <div class="header-actions">
           <router-link to="/tasks/kanban" class="btn-outline">Kanban Board</router-link>
-          <button class="btn-primary" @click="openCreate">+ New Task</button>
+          <button
+            v-if="roleStore.permissions.canCreate"
+            class="btn-primary"
+            @click="openCreate"
+          >+ New Task</button>
         </div>
+      </div>
+
+      <!-- Read-only banner -->
+      <div v-if="isReadOnly(roleStore.currentRole)" class="readonly-banner">
+        <span>👁️ View-only mode</span>
+        <span>Switch to a role with write permissions to make changes.</span>
       </div>
 
       <!-- Messages -->
@@ -293,10 +346,10 @@ onMounted(async () => {
           <div class="task-top">
             <div class="task-title">{{ task.title }}</div>
             <div class="task-actions">
-              <!-- Status switcher -->
-              <div class="status-group">
+              <!-- Status switcher (only when role can edit) -->
+              <div v-if="roleStore.permissions.canEdit" class="status-group">
                 <button
-                  v-for="next in NEXT_STATUSES[task.status]"
+                  v-for="next in legalNextStatuses(task)"
                   :key="next"
                   class="status-btn"
                   :style="{ '--btn-bg': STATUS_COLORS[next].bg, '--btn-color': STATUS_COLORS[next].color }"
@@ -306,8 +359,18 @@ onMounted(async () => {
                   → {{ next.replace('_', ' ') }}
                 </button>
               </div>
-              <button class="btn-icon" @click="openEdit(task)" title="Edit">✎</button>
-              <button class="btn-icon btn-danger-icon" @click="requestDelete(task)" title="Delete">✕</button>
+              <button
+                v-if="roleStore.permissions.canEdit"
+                class="btn-icon"
+                @click="openEdit(task)"
+                title="Edit"
+              >✎</button>
+              <button
+                v-if="roleStore.permissions.canDelete"
+                class="btn-icon btn-danger-icon"
+                @click="requestDelete(task)"
+                title="Delete"
+              >✕</button>
             </div>
           </div>
 
@@ -465,8 +528,12 @@ onMounted(async () => {
     </div>
   </div>
 
-  <!-- Delete Confirmation -->
-  <div v-if="confirmDelete !== null" class="modal-overlay" @click.self="cancelDelete">
+  <!-- Delete Confirmation (only when role can delete) -->
+  <div
+    v-if="confirmDelete !== null && roleStore.permissions.canDelete"
+    class="modal-overlay"
+    @click.self="cancelDelete"
+  >
     <div class="modal modal-sm">
       <div class="modal-header">
         <h2>Delete Task?</h2>
@@ -596,6 +663,20 @@ onMounted(async () => {
 }
 .msg-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 .msg-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+
+/* ── Read-only banner ───────────────────────────────────────────────────── */
+.readonly-banner {
+  padding: 10px 14px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ── Task list ───────────────────────────────────────────────────────────── */
 .task-list {
