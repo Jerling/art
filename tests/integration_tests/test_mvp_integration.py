@@ -440,6 +440,8 @@ class TestScenario11_IntentRecognitionAccuracy:
         with open(fixtures_path) as f:
             data = json.load(f)
         cases = data["cases"]
+        from tests.conftest import resolve_intent_date_markers
+        cases = resolve_intent_date_markers(cases)
 
         failures = []
         for case in cases:
@@ -1185,6 +1187,8 @@ class TestChecklist:
         with open(fixtures_path) as f:
             data = json.load(f)
         cases = data["cases"]
+        from tests.conftest import resolve_intent_date_markers
+        cases = resolve_intent_date_markers(cases)
         correct = 0
         for case in cases:
             from src.domain.intent import IntentData

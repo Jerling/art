@@ -59,3 +59,24 @@ def _ensure_db_schema() -> None:
         except Exception:
             # Don't mask test failures with cleanup errors.
             pass
+
+
+
+def resolve_intent_date_markers(obj):
+    """Recursively replace {"_days_from_today": N} markers with ISO dates.
+
+    Used by intent golden-dataset loaders: the fixture file stores dates
+    as semantic offsets (so it does not rot as the calendar advances),
+    and this function expands them to concrete ISO strings at test load
+    time. Day 0 (today) is preserved; negative offsets are allowed and
+    will fail downstream past-date guards (intentional).
+    """
+    from datetime import date, timedelta
+
+    if isinstance(obj, dict):
+        if set(obj.keys()) == {"_days_from_today"} and isinstance(obj["_days_from_today"], int):
+            return (date.today() + timedelta(days=obj["_days_from_today"])).isoformat()
+        return {k: resolve_intent_date_markers(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [resolve_intent_date_markers(v) for v in obj]
+    return obj
