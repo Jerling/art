@@ -699,9 +699,18 @@ class TestTaskCreationPush:
 
     @pytest.fixture(autouse=True)
     def _setup(self):
-        """Set up and tear down dependency overrides."""
+        """Set up and tear down dependency overrides.
+
+        /tasks is locked behind require_auth at the router level (Sprint 4
+        added JWT middleware to all API endpoints). When tests mock out
+        get_task_service they also need to bypass the auth check; otherwise
+        the 401 from the auth dependency short-circuits the handler before
+        the mock service is even called.
+        """
         from main import app
-        app.dependency_overrides.clear()
+        from src.utils.security import require_auth
+
+        app.dependency_overrides[require_auth] = lambda: {"sub": "test-user"}
         yield
         app.dependency_overrides.clear()
 
