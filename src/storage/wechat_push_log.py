@@ -5,7 +5,6 @@ CRUD operations for WeChatPushLog records.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession

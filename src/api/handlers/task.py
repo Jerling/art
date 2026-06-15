@@ -221,7 +221,7 @@ async def _notify_role_assignments(
         return
 
     from src.models.role import Role
-    from src.services.wechat_push import PushType, WeChatPushService
+    from src.services.wechat_push import WeChatPushService
 
     # Load roles to get their openids and names
     for rid in role_ids:
