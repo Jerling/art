@@ -52,3 +52,9 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# pre_beta_self_test.py is a standalone smoke-test script that drives
+# the app via TestClient. Its `def test(name, ...)` signature collides
+# with pytest's test-function collection rules (the `name` parameter
+# looks like a fixture reference). Run it directly with
+# `python tests/pre_beta_self_test.py`, not via pytest.
+addopts = "--ignore=tests/pre_beta_self_test.py"
