@@ -37,10 +37,24 @@ from src.llm.minimax import (
 
 @pytest.fixture
 def golden_dataset() -> list[dict[str, Any]]:
-    """Load the golden dataset for intent parsing tests."""
+    """Load the golden dataset for intent parsing tests.
+
+    The fixture uses relative dates (``{"_days_from_today": N}``) instead of
+    hard-coded ISO dates, so the test never goes stale as the calendar moves.
+    At load time we render each relative marker to ``date.today() + N`` and
+    serialize as ISO string, matching the format IntentParser returns.
+    """
+    from datetime import date, timedelta
+
     fixtures_path = Path(__file__).parent.parent / "fixtures" / "intent_golden_dataset.json"
     with open(fixtures_path) as f:
         data = json.load(f)
+    today = date.today()
+    for case in data["cases"]:
+        sd = case.get("expected", {}).get("suggested_due_date")
+        if isinstance(sd, dict) and "_days_from_today" in sd:
+            offset = int(sd["_days_from_today"])
+            case["expected"]["suggested_due_date"] = (today + timedelta(days=offset)).isoformat()
     return data["cases"]
 
 
@@ -376,13 +390,21 @@ async def test_all_golden_cases_parse_correctly(mock_provider: MiniMaxProvider, 
 
 
 def test_intent_data_accepts_valid_model() -> None:
-    """Test that IntentData.model_validate accepts a valid intent dict."""
+    """Test that IntentData.model_validate accepts a valid intent dict.
+
+    Uses a relative date (today + 7 days) so the test stays valid as the
+    calendar moves and IntentData's past-date guard does not silently clear
+    the value.
+    """
+    from datetime import date, timedelta
+
+    future = (date.today() + timedelta(days=7)).isoformat()
     data = {
         "action": "create_task",
         "title": "完成 API 设计",
         "estimated_hours": 2.5,
         "suggested_priority": "high",
-        "suggested_due_date": "2026-06-01",
+        "suggested_due_date": future,
         "confidence": 0.92,
         "raw_text": "下周三前完成 API 设计",
     }
@@ -392,7 +414,8 @@ def test_intent_data_accepts_valid_model() -> None:
     assert intent.title == "完成 API 设计"
     assert intent.estimated_hours == 2.5
     assert intent.suggested_priority == TaskPriority.HIGH
-    assert intent.suggested_due_date.year == 2026
+    assert intent.suggested_due_date is not None
+    assert intent.suggested_due_date == date.today() + timedelta(days=7)
 
 
 def test_intent_data_rejects_invalid_priority() -> None:

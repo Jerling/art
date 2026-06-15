@@ -10,7 +10,9 @@
         "title": "完成 API Gateway 的设计文档",
         "estimated_hours": 4.0,
         "suggested_priority": "high",
-        "suggested_due_date": "2026-06-03",
+        "suggested_due_date": {
+          "_days_from_today": 7
+        },
         "confidence": 0.9,
         "raw_text": "下周三前完成 API Gateway 的设计文档"
       }
@@ -36,7 +38,9 @@
         "title": "完成这个 bug 修复",
         "estimated_hours": 2.0,
         "suggested_priority": "urgent",
-        "suggested_due_date": "2026-06-01",
+        "suggested_due_date": {
+          "_days_from_today": 0
+        },
         "confidence": 0.85,
         "raw_text": "今天必须完成这个 bug 修复"
       }
@@ -101,7 +105,9 @@
         "title": "完成 API 文档的编写",
         "estimated_hours": 8.0,
         "suggested_priority": "high",
-        "suggested_due_date": "2026-05-31",
+        "suggested_due_date": {
+          "_days_from_today": 3
+        },
         "confidence": 0.9,
         "raw_text": "这周内需要完成 API 文档的编写，大概需要 8 小时"
       }
