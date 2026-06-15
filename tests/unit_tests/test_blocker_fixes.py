@@ -291,3 +291,87 @@ class TestB4_IntentDataSchema:
         assert "create_task" in serialized
         assert "test task" in serialized
         assert "1.5" in serialized
+
+
+
+# ──────────────────────────────────────────────────────────────
+# Past suggested_due_date: explicit "drop" policy (Sprint 0 follow-up)
+# ──────────────────────────────────────────────────────────────
+class TestPastDueDateDropped:
+    """Tests for the explicit past-due_date drop policy.
+
+    Strategy: when the LLM extracts a date that is already in the past,
+    IntentData.suggested_due_date is silently cleared to None. The
+    CREATE_TASK intent is still valid (title is auto-extracted, etc.)
+    and proceeds downstream. Rejecting the entire intent for one past
+    field is too aggressive — see docstring on
+    ``IntentData._validate_due_date_not_in_past``.
+    """
+
+    def test_past_due_date_is_dropped(self):
+        """A past suggested_due_date must be cleared to None, not rejected."""
+        from datetime import timedelta
+
+        from src.domain.intent import IntentAction, IntentData
+
+        past = date.today() - timedelta(days=7)
+        intent = IntentData(
+            action=IntentAction.CREATE_TASK,
+            title="follow up on may meeting",
+            suggested_due_date=past,
+        )
+        # Past date dropped
+        assert intent.suggested_due_date is None
+        # CREATE_TASK still valid -- title is preserved
+        assert intent.title == "follow up on may meeting"
+        assert intent.action == "create_task"
+
+    def test_future_due_date_is_preserved(self):
+        """A future suggested_due_date must be kept as-is."""
+        from datetime import timedelta
+
+        from src.domain.intent import IntentAction, IntentData
+
+        future = date.today() + timedelta(days=7)
+        intent = IntentData(
+            action=IntentAction.CREATE_TASK,
+            title="write sprint review",
+            suggested_due_date=future,
+        )
+        assert intent.suggested_due_date == future
+
+    def test_today_due_date_is_preserved(self):
+        """A suggested_due_date equal to today is NOT in the past -- keep it."""
+        from src.domain.intent import IntentAction, IntentData
+
+        today = date.today()
+        intent = IntentData(
+            action=IntentAction.CREATE_TASK,
+            title="submit timesheet",
+            suggested_due_date=today,
+        )
+        # Boundary: < today drops; == today keeps
+        assert intent.suggested_due_date == today
+
+    def test_none_due_date_unchanged(self):
+        """No suggested_due_date -> validator is a no-op."""
+        from src.domain.intent import IntentData
+
+        intent = IntentData()
+        assert intent.suggested_due_date is None
+
+    def test_past_due_date_logs_warning(self, caplog):
+        """Dropping a past date must emit a warning log line (audit trail)."""
+        import logging
+        from datetime import timedelta
+
+        from src.domain.intent import IntentAction, IntentData
+
+        past = date.today() - timedelta(days=30)
+        with caplog.at_level(logging.WARNING, logger="src.domain.intent"):
+            IntentData(
+                action=IntentAction.CREATE_TASK,
+                title="fix flaky test",
+                suggested_due_date=past,
+            )
+        assert any("is in the past, clearing" in r.message for r in caplog.records)

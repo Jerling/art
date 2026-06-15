@@ -96,6 +96,18 @@ class IntentData(BaseModel):
 
     @model_validator(mode="after")
     def _validate_due_date_not_in_past(self) -> IntentData:
+        """Drop past suggested_due_date instead of rejecting the whole intent.
+
+        Strategy: if the LLM extracts a date that is already in the past
+        (e.g. user says "5月1日开会" on 2026-06-16), silently clear
+        the field. CREATE_TASK still proceeds; the task is created without
+        a due date. Rationale: a single past field should not reject the
+        entire intent -- the rest of the parsed data is still useful, and
+        the cost of asking the user to re-send is high.
+        Future: when downstream services actually consume
+        ``suggested_due_date`` to set task deadlines, consider upgrading
+        to a reject-and-retry-LLM strategy so the user is informed.
+        """
         if self.suggested_due_date is not None:
             if self.suggested_due_date < date.today():
                 logger.warning(
