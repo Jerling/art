@@ -281,8 +281,7 @@ async def _process_wechat_message_background(
             result = await intent_service.process_message(content, from_user)
 
             if result.reply_text:
-                # Record push log via on_log callback (helper imported at
-                # module level — see _save_push_log_bg above)
+                # Record push log via on_log callback; see _save_push_log_bg above.
                 push_service_with_log = WeChatPushService(
                     on_log=lambda log: _save_push_log_bg(session, log),
                 )
