@@ -7,17 +7,29 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from src.utils.security import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(require_auth)])
 
-# Default paths — can be overridden via query params for flexibility
-DEFAULT_DB_PATH = str(Path(__file__).parent.parent.parent.parent / "art.db")
-DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent.parent.parent / "backups")
+# Default paths — derive DB location from DATABASE_URL, fall back to Docker-compatible default
+# Docker volume maps ./data → /app/data, so the real DB is at /app/data/art.db
+_default_db_path = str(Path(__file__).parent.parent.parent.parent / "data" / "art.db")
+_db_url = os.environ.get("DATABASE_URL", "")
+if _db_url:
+    _m = re.match(r"sqlite(?:\+aiosqlite)?:///(.+)", _db_url)
+    if _m:
+        # Resolve relative paths (e.g. "./data/art.db") to absolute
+        _default_db_path = str(Path(_m.group(1)).resolve())
+DEFAULT_DB_PATH = _default_db_path
+DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent.parent.parent / "data" / "backups")
 DEFAULT_KEEP = 7
 
 

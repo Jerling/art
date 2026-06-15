@@ -13,8 +13,9 @@ from src.schemas.role import (
 )
 from src.services.role import RoleService
 from src.storage.database import get_session
+from src.utils.security import require_auth
 
-router = APIRouter(prefix="/roles", tags=["roles"])
+router = APIRouter(prefix="/roles", tags=["roles"], dependencies=[Depends(require_auth)])
 
 
 async def get_role_service(session: AsyncSession = Depends(get_session)) -> RoleService:

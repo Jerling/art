@@ -16,10 +16,11 @@ from src.schemas.task import (
 )
 from src.services.task import TaskService
 from src.storage.database import get_session
+from src.utils.security import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(require_auth)])
 
 
 async def _save_push_log(session, log) -> None:

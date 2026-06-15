@@ -99,6 +99,28 @@ class TestRateLimiter:
         elapsed = asyncio.get_event_loop().time() - start
         assert elapsed < 0.05  # Should be fast after refill
 
+    @pytest.mark.asyncio
+    async def test_concurrent_acquire_no_deadlock(self):
+        """10+ concurrent acquire() calls must not deadlock when held lock sleeps."""
+        limiter = RateLimiter(max_tokens=1, refill_rate=10)  # 1 token, refills at 10/s
+        # First call consumes the only token
+        await limiter.acquire()
+        # Now launch 12 concurrent acquire() calls — they should all complete
+        async def _acquire():
+            await limiter.acquire()
+        start = asyncio.get_running_loop().time()
+        results = await asyncio.gather(
+            *[_acquire() for _ in range(12)], return_exceptions=True
+        )
+        elapsed = asyncio.get_running_loop().time() - start
+
+        # All should complete with no exceptions
+        failures = [r for r in results if isinstance(r, Exception)]
+        assert not failures, f"Deadlock or errors: {failures}"
+        # Total time should be bounded: ~1.2s to refill 12 tokens at 10/s
+        # (strictly less than sequential-with-lock sleep which would be 12+ seconds)
+        assert elapsed < 5.0, f"Took too long ({elapsed:.2f}s), likely still blocking on lock"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PushLog tests

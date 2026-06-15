@@ -1,14 +1,17 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useRoleStore } from '../stores/role.js'
 import { listRoles } from '../api/roles.js'
+import { FLASH_KEY } from '../router/index.js'
 
 const router = useRouter()
 const route = useRoute()
 const roleStore = useRoleStore()
 
 const rolesLoading = ref(false)
+const flash = ref(null)
+let flashTimer = null
 
 /** Show a tooltip-like permission label for the current role */
 function permissionLabel() {
@@ -31,6 +34,7 @@ async function loadRoles() {
     const data = await listRoles({ page: 1, page_size: 100 })
     roleStore.roles = data.items || []
     roleStore.syncCurrentRole()
+    roleStore.loaded = true
   } catch (e) {
     console.warn('Failed to load roles for nav:', e.message)
   } finally {
@@ -38,10 +42,44 @@ async function loadRoles() {
   }
 }
 
+/** Read a one-shot flash message left by the router guard. */
+function consumeFlash() {
+  try {
+    const raw = localStorage.getItem(FLASH_KEY)
+    if (!raw) return
+    const payload = JSON.parse(raw)
+    // Expire stale flashes (older than 30s) so they don't haunt deep-links.
+    if (!payload?.ts || Date.now() - payload.ts > 30_000) {
+      localStorage.removeItem(FLASH_KEY)
+      return
+    }
+    localStorage.removeItem(FLASH_KEY)
+    flash.value = payload
+    if (flashTimer) clearTimeout(flashTimer)
+    flashTimer = setTimeout(() => {
+      flash.value = null
+    }, 4500)
+  } catch (_) {
+    /* ignore malformed payload */
+  }
+}
+
+function dismissFlash() {
+  flash.value = null
+  if (flashTimer) clearTimeout(flashTimer)
+}
+
 onMounted(() => {
-  if (!roleStore.roles.length) {
+  if (!roleStore.loaded) {
     loadRoles()
   }
+  // Run on the next tick so route navigation triggered by the guard
+  // has settled before we read the flash.
+  setTimeout(consumeFlash, 0)
+})
+
+onBeforeUnmount(() => {
+  if (flashTimer) clearTimeout(flashTimer)
 })
 </script>
 
@@ -64,6 +102,7 @@ onMounted(() => {
           Tasks
         </router-link>
         <router-link
+          v-if="roleStore.permissions.canManageRoles"
           to="/roles"
           class="nav-link-item"
           :class="{ active: route.path.startsWith('/roles') }"
@@ -103,6 +142,23 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Route-guard flash toast -->
+    <transition name="flash">
+      <div
+        v-if="flash"
+        class="route-flash"
+        :class="[`route-flash-${flash.type || 'info'}`]"
+        @click="dismissFlash"
+        role="status"
+      >
+        <span class="route-flash-icon">
+          {{ flash.type === 'error' ? '⚠' : 'ℹ' }}
+        </span>
+        <span class="route-flash-msg">{{ flash.message }}</span>
+        <button class="route-flash-close" @click.stop="dismissFlash" aria-label="Dismiss">×</button>
+      </div>
+    </transition>
   </nav>
 </template>
 
@@ -224,5 +280,68 @@ onMounted(() => {
 .role-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Route-guard flash toast */
+.route-flash {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  z-index: 95;
+  max-width: 360px;
+}
+
+.route-flash-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.route-flash-info {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.route-flash-icon {
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.route-flash-msg {
+  flex: 1;
+}
+
+.route-flash-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 2px;
+}
+
+.flash-enter-active,
+.flash-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.flash-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.flash-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoleStore } from '../stores/role.js'
 import { listRoles, createRole, updateRole, deleteRole } from '../api/roles.js'
+import { isAdmin } from '../utils/permissions.js'
 
 const roleStore = useRoleStore()
 
@@ -23,9 +24,11 @@ const confirmDelete = ref(null) // role id pending delete
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const isCurrentRole = (id) => roleStore.currentRoleId === id
+const userIsAdmin = computed(() => isAdmin(roleStore.currentRole))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function showCreate() {
+  if (!userIsAdmin.value) return
   form.value = { name: '', description: '' }
   formError.value = null
   modalMode.value = 'create'
@@ -34,6 +37,7 @@ function showCreate() {
 }
 
 function showEdit(role) {
+  if (!userIsAdmin.value) return
   form.value = { name: role.name, description: role.description ?? '' }
   formError.value = null
   modalMode.value = 'edit'
@@ -69,6 +73,10 @@ async function fetchRoles() {
 }
 
 async function submitForm() {
+  if (!userIsAdmin.value) {
+    error.value = 'Only admins can create or edit roles.'
+    return
+  }
   formLoading.value = true
   formError.value = null
   try {
@@ -85,6 +93,7 @@ async function submitForm() {
       roleStore.syncCurrentRole()
       successMsg.value = `Role "${updated.name}" updated.`
     }
+    // Only close the modal after the server confirms success.
     closeModal()
     setTimeout(() => { successMsg.value = null }, 3000)
   } catch (e) {
@@ -94,19 +103,30 @@ async function submitForm() {
   }
 }
 
-async function requestDelete(role) {
+function requestDelete(role) {
+  if (!userIsAdmin.value) {
+    error.value = 'Only admins can delete roles.'
+    return
+  }
   confirmDelete.value = role.id
 }
 
-async function cancelDelete() {
+function cancelDelete() {
   confirmDelete.value = null
 }
 
 async function confirmDeleteRole() {
+  if (!userIsAdmin.value) {
+    error.value = 'Only admins can delete roles.'
+    confirmDelete.value = null
+    return
+  }
   const id = confirmDelete.value
-  confirmDelete.value = null
   try {
     await deleteRole(id)
+    // Reset modal state only after a successful delete so the user
+    // can retry from the same context on failure.
+    confirmDelete.value = null
     roles.value = roles.value.filter((r) => r.id !== id)
     roleStore.roles = roles.value
     if (roleStore.currentRoleId === id) roleStore.clearCurrentRole()
@@ -114,10 +134,15 @@ async function confirmDeleteRole() {
     setTimeout(() => { successMsg.value = null }, 3000)
   } catch (e) {
     error.value = e.message
+    confirmDelete.value = null
   }
 }
 
 function switchToRole(role) {
+  if (!userIsAdmin.value && !roleStore.permissions.canAssign) {
+    error.value = 'Your role does not have permission to switch roles.'
+    return
+  }
   roleStore.setCurrentRoleId(role.id, role)
   successMsg.value = `Switched to role "${role.name}".`
   setTimeout(() => { successMsg.value = null }, 3000)
@@ -129,93 +154,107 @@ onMounted(fetchRoles)
 
 <template>
   <div class="roles-page">
-    <!-- Header -->
-    <div class="page-header">
-      <h1>Roles</h1>
-      <button class="btn-primary" @click="showCreate">+ New Role</button>
-    </div>
+    <!-- Admin-only body -->
+    <template v-if="userIsAdmin">
+      <!-- Header -->
+      <div class="page-header">
+        <h1>Roles</h1>
+        <button class="btn-primary" @click="showCreate">+ New Role</button>
+      </div>
 
-    <!-- Messages -->
-    <div v-if="error" class="msg msg-error" @click="clearMessages">{{ error }}</div>
-    <div v-if="successMsg" class="msg msg-success" @click="clearMessages">{{ successMsg }}</div>
+      <!-- Messages -->
+      <div v-if="error" class="msg msg-error" @click="clearMessages">{{ error }}</div>
+      <div v-if="successMsg" class="msg msg-success" @click="clearMessages">{{ successMsg }}</div>
 
-    <!-- Current role badge -->
-    <div v-if="roleStore.currentRole" class="current-role-badge">
-      Current role: <strong>{{ roleStore.currentRole.name }}</strong>
-    </div>
+      <!-- Current role badge -->
+      <div v-if="roleStore.currentRole" class="current-role-badge">
+        Current role: <strong>{{ roleStore.currentRole.name }}</strong>
+      </div>
 
-    <!-- Table -->
-    <div class="table-wrap">
-      <table v-if="!loading && roles.length">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Description</th>
-            <th>Created</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="role in roles" :key="role.id" :class="{ 'row-current': isCurrentRole(role.id) }">
-            <td>
-              {{ role.name }}
-              <span v-if="isCurrentRole(role.id)" class="badge-current">active</span>
-            </td>
-            <td>{{ role.description ?? '—' }}</td>
-            <td>{{ new Date(role.created_at).toLocaleDateString() }}</td>
-            <td class="actions">
-              <button class="btn-small" @click="switchToRole(role)" :disabled="isCurrentRole(role.id)">Switch</button>
-              <button class="btn-small" @click="showEdit(role)">Edit</button>
-              <button class="btn-small btn-danger" @click="requestDelete(role)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- Table -->
+      <div class="table-wrap">
+        <table v-if="!loading && roles.length">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="role in roles" :key="role.id" :class="{ 'row-current': isCurrentRole(role.id) }">
+              <td>
+                {{ role.name }}
+                <span v-if="isCurrentRole(role.id)" class="badge-current">active</span>
+              </td>
+              <td>{{ role.description ?? '—' }}</td>
+              <td>{{ new Date(role.created_at).toLocaleDateString() }}</td>
+              <td class="actions">
+                <button class="btn-small" @click="switchToRole(role)" :disabled="isCurrentRole(role.id)">Switch</button>
+                <button class="btn-small" @click="showEdit(role)">Edit</button>
+                <button class="btn-small btn-danger" @click="requestDelete(role)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-      <div v-else-if="loading" class="empty">Loading…</div>
-      <div v-else class="empty">No roles yet. Create one!</div>
-    </div>
+        <div v-else-if="loading" class="empty">Loading…</div>
+        <div v-else class="empty">No roles yet. Create one!</div>
+      </div>
 
-    <!-- Create / Edit Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal">
-        <div class="modal-header">
-          <h2>{{ modalMode === 'create' ? 'New Role' : 'Edit Role' }}</h2>
-          <button class="btn-close" @click="closeModal">×</button>
+      <!-- Create / Edit Modal -->
+      <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>{{ modalMode === 'create' ? 'New Role' : 'Edit Role' }}</h2>
+            <button class="btn-close" @click="closeModal">×</button>
+          </div>
+          <form @submit.prevent="submitForm">
+            <div class="field">
+              <label for="role-name">Name</label>
+              <input id="role-name" v-model="form.name" required maxlength="100" placeholder="e.g. Admin" />
+            </div>
+            <div class="field">
+              <label for="role-desc">Description <span class="optional">(optional)</span></label>
+              <textarea id="role-desc" v-model="form.description" maxlength="500" rows="3" placeholder="What does this role do?"></textarea>
+            </div>
+            <div v-if="formError" class="msg msg-error">{{ formError }}</div>
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
+              <button type="submit" class="btn-primary" :disabled="formLoading">
+                {{ formLoading ? 'Saving…' : (modalMode === 'create' ? 'Create' : 'Save') }}
+              </button>
+            </div>
+          </form>
         </div>
-        <form @submit.prevent="submitForm">
-          <div class="field">
-            <label for="role-name">Name</label>
-            <input id="role-name" v-model="form.name" required maxlength="100" placeholder="e.g. Admin" />
+      </div>
+
+      <!-- Delete Confirmation -->
+      <div v-if="confirmDelete !== null" class="modal-overlay" @click.self="cancelDelete">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Delete Role?</h2>
           </div>
-          <div class="field">
-            <label for="role-desc">Description <span class="optional">(optional)</span></label>
-            <textarea id="role-desc" v-model="form.description" maxlength="500" rows="3" placeholder="What does this role do?"></textarea>
-          </div>
-          <div v-if="formError" class="msg msg-error">{{ formError }}</div>
+          <p>This will soft-delete the role. Are you sure?</p>
           <div class="modal-footer">
-            <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
-            <button type="submit" class="btn-primary" :disabled="formLoading">
-              {{ formLoading ? 'Saving…' : (modalMode === 'create' ? 'Create' : 'Save') }}
-            </button>
+            <button class="btn-secondary" @click="cancelDelete">Cancel</button>
+            <button class="btn-danger" @click="confirmDeleteRole">Delete</button>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </template>
 
-    <!-- Delete Confirmation -->
-    <div v-if="confirmDelete !== null" class="modal-overlay" @click.self="cancelDelete">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h2>Delete Role?</h2>
-        </div>
-        <p>This will soft-delete the role. Are you sure?</p>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="cancelDelete">Cancel</button>
-          <button class="btn-danger" @click="confirmDeleteRole">Delete</button>
-        </div>
+    <!-- Non-admin empty state -->
+    <template v-else>
+      <div class="page-header">
+        <h1>Roles</h1>
       </div>
-    </div>
+      <div class="empty admin-only-empty">
+        <p>🛡️ Admin only</p>
+        <p>Role management is restricted to administrators. Switch to an admin role to manage roles.</p>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -381,6 +420,19 @@ tr:hover {
   padding: 48px;
   color: var(--text);
   font-size: 15px;
+}
+
+.admin-only-empty p:first-child {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin-bottom: 8px;
+}
+
+.admin-only-empty p:last-child {
+  font-size: 14px;
+  max-width: 420px;
+  margin: 0 auto;
 }
 
 /* Modal */

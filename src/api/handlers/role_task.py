@@ -13,6 +13,7 @@ from src.schemas.role_task import (
 )
 from src.services.role_task import RoleTaskService
 from src.storage.database import async_session_maker
+from src.utils.security import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def get_role_task_service(
 
 # ── Router for /tasks/{id}/roles ─────────────────────────────────────────────
 
-task_roles_router = APIRouter(prefix="/tasks", tags=["task-roles"])
+task_roles_router = APIRouter(prefix="/tasks", tags=["task-roles"], dependencies=[Depends(require_auth)])
 
 
 async def _save_push_log_for_role(session, log) -> None:
@@ -133,7 +134,7 @@ async def unassign_role_from_task(
 
 # ── Router for /roles/{id}/tasks ─────────────────────────────────────────────
 
-role_tasks_router = APIRouter(prefix="/roles", tags=["role-tasks"])
+role_tasks_router = APIRouter(prefix="/roles", tags=["role-tasks"], dependencies=[Depends(require_auth)])
 
 
 @role_tasks_router.get(

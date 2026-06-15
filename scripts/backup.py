@@ -25,14 +25,15 @@ logger = logging.getLogger("art.backup")
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-DEFAULT_DB_PATH = str(Path(__file__).parent.parent / "art.db")
+DEFAULT_DB_PATH = str(Path(__file__).parent.parent / "data" / "art.db")
 _db_url = os.environ.get("DATABASE_URL", "")
 if _db_url:
     import re
     _m = re.match(r"sqlite(?:\+aiosqlite)?:///(.+)", _db_url)
     if _m:
-        DEFAULT_DB_PATH = _m.group(1)
-DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent / "backups")
+        # Resolve relative paths (e.g. "./data/art.db") to absolute
+        DEFAULT_DB_PATH = str(Path(_m.group(1)).resolve())
+DEFAULT_BACKUP_DIR = str(Path(__file__).parent.parent / "data" / "backups")
 DEFAULT_KEEP = 7
 
 BACKUP_FILENAME_RE = re.compile(r"^backup_(\d{8}_\d{6})\.db$")
@@ -79,20 +80,33 @@ def create_backup(db_path: str, backup_dir: str) -> Path:
 
     ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     backup_path = out_dir / f"backup_{ts}.db"
+    tmp_path = out_dir / f"backup_{ts}.db.tmp"
+
+    # Clean up any stale .tmp files from previous interrupted backups.
+    for f in out_dir.glob("backup_*.db.tmp"):
+        f.unlink(missing_ok=True)
 
     logger.info(f"Backing up {source} -> {backup_path}")
 
     # VACUUM INTO creates an online (non-locking) copy of the database.
     # Works with file-based SQLite databases.
     # We use a parameterized query via the backup API for safety.
+    #
+    # Atomic write: VACUUM INTO writes to a .tmp file first, then we
+    # atomically rename to the final .db path. This prevents leaving
+    # behind a corrupted .db file if the process is interrupted (OOM,
+    # disk full, SIGKILL) during the VACUUM.
     conn = sqlite3.connect(str(source))
     try:
         # VACUUM INTO does not support parameter binding, so we sanitize manually.
         # The path is always generated internally (timestamp-based), never user input.
-        backup_sql = f"VACUUM INTO '{str(backup_path)}'"
+        backup_sql = f"VACUUM INTO '{str(tmp_path)}'"
         conn.execute(backup_sql)
     finally:
         conn.close()
+
+    # Atomic rename: .tmp -> .db (POSIX guarantee: rename is atomic on the same filesystem)
+    tmp_path.rename(backup_path)
 
     size_mb = backup_path.stat().st_size / (1024 * 1024)
     logger.info(f"Backup complete: {backup_path.name} ({size_mb:.2f} MB)")

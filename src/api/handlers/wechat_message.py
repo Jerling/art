@@ -7,8 +7,9 @@ from pydantic import BaseModel, ConfigDict
 
 from src.storage.database import get_session
 from src.storage.wechat_message import WeChatMessageStore
+from src.utils.security import require_auth
 
-router = APIRouter(prefix="/messages", tags=["messages"])
+router = APIRouter(prefix="/messages", tags=["messages"], dependencies=[Depends(require_auth)])
 
 
 # ─── Schemas ───────────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { listRoles } from '../api/roles.js'
 
 const STORAGE_KEY = 'art_current_role_id'
 
@@ -45,6 +46,13 @@ export const useRoleStore = defineStore('role', () => {
   /** @type {import('vue').Ref<object[]>} */
   const roles = ref([])
 
+  /** Whether the initial roles fetch has completed at least once. */
+  /** @type {import('vue').Ref<boolean>} */
+  const loaded = ref(false)
+
+  /** In-flight fetch promise to deduplicate concurrent calls. */
+  let fetchPromise = null
+
   const hasRole = computed(() => currentRoleId.value !== null)
 
   /** Compute permissions from the current role name */
@@ -84,14 +92,47 @@ export const useRoleStore = defineStore('role', () => {
     currentRole.value = roles.value.find((r) => r.id === currentRoleId.value) ?? null
   }
 
+  /**
+   * Load roles from the server. Sets `loaded` to true on the first
+   * successful fetch. Concurrent callers share a single in-flight promise.
+   */
+  async function fetchRoles() {
+    if (fetchPromise) return fetchPromise
+    fetchPromise = (async () => {
+      try {
+        const data = await listRoles({ page: 1, page_size: 100 })
+        roles.value = data.items || []
+        syncCurrentRole()
+        loaded.value = true
+        return roles.value
+      } finally {
+        // Allow future calls (e.g. after a refresh) to re-fetch.
+        fetchPromise = null
+      }
+    })()
+    return fetchPromise
+  }
+
+  /**
+   * Awaitable hook for components: resolves immediately if roles are
+   * already loaded, otherwise performs the first fetch.
+   */
+  async function ensureLoaded() {
+    if (loaded.value) return
+    await fetchRoles()
+  }
+
   return {
     currentRoleId,
     currentRole,
     roles,
+    loaded,
     hasRole,
     permissions,
     setCurrentRoleId,
     clearCurrentRole,
     syncCurrentRole,
+    fetchRoles,
+    ensureLoaded,
   }
 })
