@@ -311,3 +311,54 @@ class TestPrometheusMiddleware:
                 break
         else:
             pytest.fail("art_http_active_connections not found in metrics output")
+
+
+class TestPrometheusEndpointCardinality:
+    """Cardinality protection: endpoint label must use the route template,
+    not the raw path. Otherwise /tasks/1, /tasks/2, ... create one label
+    per value and OOM Prometheus under traffic.
+    """
+
+    @pytest.mark.asyncio
+    async def test_path_parameter_routes_use_template(self):
+        """Different id values in the same route must collapse to one label set."""
+        from src.observability import metrics as metrics_mod
+
+        metrics_mod.http_requests_total.clear()
+        # Pick a path that takes a parameter in the current API. /roles/{id}
+        # is the simplest public route.
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.get("/roles/1")
+            await client.get("/roles/2")
+            await client.get("/roles/9999")
+            resp = await client.get("/metrics")
+        text = resp.text
+        # Raw paths /roles/1, /roles/2, /roles/9999 must NOT appear as separate
+        # endpoint labels. The route template /roles/{id} should.
+        assert 'endpoint="/roles/1"' not in text, (
+            "Raw path /roles/1 leaked into label set — cardinality bomb"
+        )
+        assert 'endpoint="/roles/2"' not in text
+        assert 'endpoint="/roles/9999"' not in text
+        assert 'endpoint="/roles/{role_id}"' in text, (
+            "Expected the route template to be used as the endpoint label"
+        )
+
+    @pytest.mark.asyncio
+    async def test_unmatched_path_uses_unmatched_bucket(self):
+        """Requests that don't match any route (404) must collapse to a
+        single '__unmatched__' label, not the raw 404 path."""
+        from src.observability import metrics as metrics_mod
+
+        metrics_mod.http_requests_total.clear()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.get("/this/path/does/not/exist")
+            await client.get("/another/random/missing")
+            resp = await client.get("/metrics")
+        text = resp.text
+        unmatched = 'endpoint="__unmatched__"'
+        assert unmatched in text, (
+            "Unmatched routes must collapse to a single __unmatched__ label"
+        )

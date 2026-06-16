@@ -56,21 +56,20 @@ async def prometheus_middleware(request: Request, call_next):
     metrics = _metrics  # local ref for speed
 
     method = request.method
-    # Use route path pattern (e.g. "/tasks/{id}") when available, else raw path
-    endpoint = request.url.path
-    if request.scope.get("route"):
-        endpoint = request.scope["route"].path or endpoint
-
     metrics.http_active_connections.inc()
     start = time.perf_counter()
     status = "500"  # default if call_next raises before returning
+    response: Response | None = None
     try:
         response = await call_next(request)
         status = str(response.status_code)
         return response
-    except Exception:
-        raise
     finally:
+        # Resolve the matched route template AFTER call_next so we never use
+        # the raw path as a label (which would create unbounded cardinality
+        # for /tasks/{id} style paths and OOM Prometheus on traffic).
+        route = request.scope.get("route")
+        endpoint = getattr(route, "path", None) or "__unmatched__"
         elapsed = time.perf_counter() - start
         metrics.http_requests_total.labels(
             method=method, endpoint=endpoint, status=status
