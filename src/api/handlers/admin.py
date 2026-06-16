@@ -4,6 +4,7 @@ POST /api/v1/admin/backup  — trigger an immediate SQLite backup
 GET  /api/v1/admin/backup  — list available backups
 """
 from __future__ import annotations
+from typing import Any
 
 import asyncio
 import logging
@@ -42,7 +43,7 @@ async def trigger_backup(
     db_path: str = Query(DEFAULT_DB_PATH, description="Source database path"),
     backup_dir: str = Query(DEFAULT_BACKUP_DIR, description="Backup output directory"),
     keep: int = Query(DEFAULT_KEEP, ge=1, le=365, description="Number of backups to retain"),
-) -> dict:
+) -> dict[str, Any]:
     """Trigger an immediate SQLite backup.
 
     Uses VACUUM INTO for zero-downtime online backup.
@@ -74,7 +75,7 @@ async def trigger_backup(
 )
 async def list_backups(
     backup_dir: str = Query(DEFAULT_BACKUP_DIR, description="Backup directory to scan"),
-) -> dict:
+) -> dict[str, Any]:
     """List available backup files."""
     import re
     from datetime import datetime

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp import types
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -192,6 +192,7 @@ class MCPClient:
 
         # Build server parameters - command is guaranteed non-None here
         # because is_configured check passed above
+        assert self._config.command is not None
         self._server_params = StdioServerParameters(
             command=self._config.command,
             args=self._config.args,
@@ -255,8 +256,10 @@ class MCPClient:
 
         This is extracted into a separate method to allow mocking in tests.
         """
-        # stdio_client is an async context manager that yields (read_stream, write_stream)
-        return await stdio_client(params).__aenter__()
+        # stdio_client is an async context manager that yields (read_stream, write_stream).
+        # The mcp SDK has no type stubs, so we cast to the declared return type.
+        result = await stdio_client(params).__aenter__()
+        return cast(tuple[Any, Any], result)
 
     async def _cleanup_stdio_transport(self, transport: tuple[Any, Any]) -> None:
         """Clean up stdio transport resources."""
@@ -330,7 +333,8 @@ class MCPClient:
         else:
             # First call — populate cache
             tools = await self.list_tools()
-            if tool_name not in self._tool_names_cache:  # type: ignore[union-attr]
+            assert self._tool_names_cache is not None
+            if tool_name not in self._tool_names_cache:
                 raise MCPToolNotFoundError(
                     f"Tool '{tool_name}' not found. Available tools: {self._tool_names_cache}"
                 )

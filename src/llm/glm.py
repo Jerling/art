@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -153,7 +153,7 @@ class GLMProvider(LLMProvider):
         # First choice's first message content
         message = choices[0].get("message", {})
         content = message.get("content", "")
-        return content
+        return cast(str, content)
 
     async def embed(self, text: str) -> list[float]:
         """Generate a text embedding via GLM embedding API.
@@ -209,7 +209,7 @@ class GLMProvider(LLMProvider):
         if not embeddings:
             raise APIError(f"GLM returned no embeddings: {data}")
 
-        return embeddings[0].get("embedding", [])
+        return cast(list[float], embeddings[0].get("embedding", []))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

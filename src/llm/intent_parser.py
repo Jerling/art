@@ -159,7 +159,7 @@ class IntentParser:
         # (renamed from DecodeError in httpx >= 0.28)
         if hasattr(httpx, "DecodingError") and isinstance(exc, httpx.DecodingError):
             return "invalid_json"
-        if hasattr(httpx, "DecodeError") and isinstance(exc, httpx.DecodeError):  # type: ignore[attr-defined]
+        if hasattr(httpx, "DecodeError") and isinstance(exc, httpx.DecodeError):
             return "invalid_json"
         # Check nested cause — complete() wraps httpx errors into LLMError
         if exc.__cause__ is not None and isinstance(exc.__cause__, Exception):
