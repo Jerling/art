@@ -5,11 +5,10 @@ All external input to intent_data must now pass through IntentData.parse_obj().
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 from enum import Enum
 from typing import Annotated, Any
-
-import logging
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 

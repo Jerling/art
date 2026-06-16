@@ -5,9 +5,8 @@ Run with:
 """
 from __future__ import annotations
 
-import math
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,6 +16,7 @@ from pydantic import ValidationError
 sys.path.insert(0, sys.path[0])
 
 from src.schemas.task import (
+    VALID_TRANSITIONS,
     PaginatedTasksResponse,
     TaskCreate,
     TaskPriority,
@@ -24,7 +24,6 @@ from src.schemas.task import (
     TaskStatus,
     TaskStatusUpdate,
     TaskUpdate,
-    VALID_TRANSITIONS,
 )
 
 
@@ -192,8 +191,8 @@ class TestTaskServiceValidation:
         mock_task.priority = "MEDIUM"
         mock_task.estimated_hours = None
         mock_task.deleted_at = None
-        mock_task.created_at = datetime.now(timezone.utc)
-        mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.created_at = datetime.now(UTC)
+        mock_task.updated_at = datetime.now(UTC)
         mock_task.openid = None
 
         mock_session.add = MagicMock()
@@ -414,8 +413,8 @@ class TestTaskHandlerSchemas:
             status="PENDING",  # str → TaskStatus
             priority="HIGH",  # str → TaskPriority
             estimated_hours=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             role_ids=[],
         )
         assert response.status == TaskStatus.PENDING
@@ -450,7 +449,8 @@ class TestTaskHandlerMocked:
 
     @pytest.mark.asyncio
     async def test_create_task_handler_success(self, mock_service):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from src.api.handlers.task import create_task
 
         mock_task = MagicMock()
@@ -460,8 +460,8 @@ class TestTaskHandlerMocked:
         mock_task.status = "PENDING"
         mock_task.priority = "MEDIUM"
         mock_task.estimated_hours = None
-        mock_task.created_at = datetime.now(timezone.utc)
-        mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.created_at = datetime.now(UTC)
+        mock_task.updated_at = datetime.now(UTC)
         mock_task.openid = None
 
         mock_service.create = AsyncMock(return_value=mock_task)
@@ -542,8 +542,8 @@ class TestTaskHandlerMocked:
 
     @pytest.mark.asyncio
     async def test_update_status_handler_invalid_transition(self, mock_service):
+
         from src.api.handlers.task import update_task_status
-        from datetime import datetime, timezone
 
         mock_task_before = MagicMock()
         mock_task_before.status = "DONE"
@@ -563,7 +563,8 @@ class TestTaskHandlerMocked:
 
     @pytest.mark.asyncio
     async def test_list_tasks_handler(self, mock_service):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from src.api.handlers.task import list_tasks
 
         mock_task = MagicMock()
@@ -573,8 +574,8 @@ class TestTaskHandlerMocked:
         mock_task.status = "PENDING"
         mock_task.priority = "MEDIUM"
         mock_task.estimated_hours = None
-        mock_task.created_at = datetime.now(timezone.utc)
-        mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.created_at = datetime.now(UTC)
+        mock_task.updated_at = datetime.now(UTC)
         mock_task.openid = None
 
         mock_service.list_tasks = AsyncMock(return_value=([mock_task], 1))
@@ -596,6 +597,7 @@ class TestTaskHandlerHTTP:
     @pytest.fixture
     def client(self, valid_token):
         from fastapi.testclient import TestClient
+
         from main import app
         return TestClient(app, headers={"Authorization": f"Bearer {valid_token}"})
 
@@ -828,6 +830,7 @@ class TestTaskServiceExtended:
     @pytest.mark.asyncio
     async def test_create_task_integrity_error(self, mock_session):
         from sqlalchemy.exc import IntegrityError
+
         from src.services.task import TaskService
 
         mock_session.add = MagicMock()
@@ -899,6 +902,7 @@ class TestTaskServiceExtended:
     @pytest.mark.asyncio
     async def test_update_task_integrity_error(self, mock_session):
         from sqlalchemy.exc import IntegrityError
+
         from src.services.task import TaskService
 
         mock_task = MagicMock()

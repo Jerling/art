@@ -4,13 +4,13 @@ POST /api/v1/admin/backup  — trigger an immediate SQLite backup
 GET  /api/v1/admin/backup  — list available backups
 """
 from __future__ import annotations
-from typing import Any
 
 import asyncio
 import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -80,7 +80,7 @@ async def list_backups(
     import re
     from datetime import datetime
 
-    BACKUP_RE = re.compile(r"^backup_(\d{8}_\d{6})\.db$")
+    backup_re = re.compile(r"^backup_(\d{8}_\d{6})\.db$")
     out_dir = Path(backup_dir)
 
     if not out_dir.exists():
@@ -89,7 +89,7 @@ async def list_backups(
     backups = []
     for entry in sorted(out_dir.iterdir(), reverse=True):
         if entry.is_file():
-            m = BACKUP_RE.match(entry.name)
+            m = backup_re.match(entry.name)
             if m:
                 ts_str = m.group(1)
                 try:

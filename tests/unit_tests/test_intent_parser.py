@@ -8,11 +8,9 @@ Fixtures:
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import statistics
 import time
-from importlib import resources
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,13 +20,10 @@ import pytest
 from src.domain.intent import IntentAction, IntentData, TaskPriority
 from src.llm.intent_parser import IntentParser, IntentParsingError
 from src.llm.minimax import (
-    APIError,
     AuthenticationError,
-    LLMError,
     MiniMaxProvider,
     RateLimitError,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures

@@ -1,15 +1,12 @@
 """Tests for role-task association API."""
-import pytest
 from datetime import datetime
 
-from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.models import Base
-from src.models.task import Task
 from src.models.role import Role
-from src.models.role_task import RoleTask
-
+from src.models.task import Task
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 

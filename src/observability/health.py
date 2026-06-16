@@ -89,7 +89,7 @@ async def _check_database() -> dict[str, Any]:
             await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=CHECK_TIMEOUT)
         latency_ms = (time.perf_counter() - start) * 1000
         return {"status": "ok", "latency_ms": round(latency_ms, 2)}
-    except asyncio.TimeoutError:
+    except TimeoutError:
         latency_ms = (time.perf_counter() - start) * 1000
         logger.warning("[health/db] Database check timed out (%.0fms)", latency_ms)
         return {"status": "error", "latency_ms": round(latency_ms, 2), "error": "timeout"}

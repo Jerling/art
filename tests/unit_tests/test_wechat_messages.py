@@ -16,7 +16,6 @@ sys.path.insert(0, sys.path[0])
 from src.models.wechat_message import WeChatMessage
 from src.storage.wechat_message import WeChatMessageStore
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Store unit tests (mocked session)
 # ─────────────────────────────────────────────────────────────────────────────

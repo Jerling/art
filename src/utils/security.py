@@ -50,12 +50,12 @@ async def require_auth(
     try:
         payload = decode_access_token(credentials.credentials)
         return payload
-    except JWTError:
+    except JWTError as jwt_err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from jwt_err
 
 
 # ──────────────────────────────────────────────────────────────

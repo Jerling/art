@@ -56,14 +56,14 @@ class WeChatMessageStore:
         try:
             await self.session.commit()
             await self.session.refresh(msg)
-        except IntegrityError:
+        except IntegrityError as err:
             await self.session.rollback()
             # msg_id collision — treat as already stored
             if msg_id:
                 existing = await self.get_by_msg_id(msg_id)
                 if existing:
                     return existing
-            raise ValueError("Failed to store WeChat message due to constraint violation")
+            raise ValueError("Failed to store WeChat message due to constraint violation") from err
 
         return msg
 

@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING
 from src.domain.intent import IntentAction, IntentData
 from src.llm.base import LLMError
 from src.llm.glm import analyze_intent
+from src.models.task import Task  # noqa: E402
 from src.schemas.task import TaskCreate, TaskPriority
 from src.services.task import TaskService
-from src.models.task import Task  # noqa: E402
 
 if TYPE_CHECKING:
     from src.llm.glm import GLMProvider

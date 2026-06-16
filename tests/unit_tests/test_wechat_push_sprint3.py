@@ -14,7 +14,7 @@ Run with:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -22,13 +22,11 @@ import pytest
 
 from src.services.wechat_push import (
     PushLog,
-    PushResult,
     PushType,
     RateLimiter,
     TokenCache,
     WeChatPushService,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TokenCache tests

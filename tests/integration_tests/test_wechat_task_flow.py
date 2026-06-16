@@ -12,8 +12,7 @@ Run with:
 """
 from __future__ import annotations
 
-import json
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,7 +22,6 @@ from src.domain.intent import IntentAction, IntentData, TaskPriority
 from src.services.intent import IntentResult, IntentService
 from src.services.task import TaskService
 from src.services.wechat_push import PushResult, WeChatPushService
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -676,7 +674,6 @@ class TestTaskCreationPush:
 
     def _make_mock_task(self, task_id=1, title="Test", priority="HIGH", estimated_hours: float | None = 4.0, openid: str | None = "oABC123"):
         """Helper: build a properly configured mock Task."""
-        from datetime import datetime, timezone
 
         mock_task = MagicMock()
         mock_task.id = task_id
@@ -685,8 +682,8 @@ class TestTaskCreationPush:
         mock_task.status = "PENDING"
         mock_task.priority = priority
         mock_task.estimated_hours = estimated_hours
-        mock_task.created_at = datetime.now(timezone.utc)
-        mock_task.updated_at = datetime.now(timezone.utc)
+        mock_task.created_at = datetime.now(UTC)
+        mock_task.updated_at = datetime.now(UTC)
         mock_task.openid = openid
         return mock_task
 
@@ -717,10 +714,10 @@ class TestTaskCreationPush:
     @pytest.mark.asyncio
     async def test_create_task_with_openid_pushes_notification(self):
         """Test: POST /tasks with openid → push notification sent."""
-        from datetime import datetime, timezone
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from httpx import ASGITransport, AsyncClient
+
         from main import app
         from src.api.handlers.task import get_task_service
 
@@ -777,10 +774,10 @@ class TestTaskCreationPush:
     @pytest.mark.asyncio
     async def test_create_task_without_openid_no_push(self):
         """Test: POST /tasks without openid → no push attempted."""
-        from datetime import datetime, timezone
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, patch
 
         from httpx import ASGITransport, AsyncClient
+
         from main import app
         from src.api.handlers.task import get_task_service
 
@@ -811,10 +808,10 @@ class TestTaskCreationPush:
     @pytest.mark.asyncio
     async def test_create_task_push_failure_still_returns_201(self):
         """Test: push failure doesn't break the 201 response."""
-        from datetime import datetime, timezone
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from httpx import ASGITransport, AsyncClient
+
         from main import app
         from src.api.handlers.task import get_task_service
 
@@ -855,6 +852,7 @@ class TestTaskCreationPush:
         from unittest.mock import AsyncMock, patch
 
         from httpx import ASGITransport, AsyncClient
+
         from main import app
         from src.api.handlers.task import get_task_service
 

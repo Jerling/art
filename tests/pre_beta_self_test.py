@@ -1,5 +1,8 @@
 """Full pre-beta self-test with correct API inputs and env vars."""
-import asyncio, json, sys, os
+import asyncio
+import json
+import os
+import sys
 
 # Set required env vars
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
@@ -13,8 +16,9 @@ os.environ["REDIS_URL"] = ""
 os.chdir("/home/jer/data/Code/art")
 sys.path.insert(0, "/home/jer/data/Code/art")
 
-from src.storage.database import engine
 from src.models.role import Role
+from src.storage.database import engine
+
 
 async def init_db():
     async with engine.begin() as conn:
@@ -24,6 +28,7 @@ async def init_db():
 asyncio.run(init_db())
 
 from fastapi.testclient import TestClient
+
 from main import app
 
 client = TestClient(app)

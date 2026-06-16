@@ -8,28 +8,24 @@ Tests cover:
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.services.wechat_message import (
+    ToolExecutionResult,
+    WeChatMessageContext,
+    WeChatMessageService,
+)
 from src.worker.mcp_client import (
     MCPClient,
-    MCPClientError,
     MCPConnectionError,
-    MCPToolExecutionError,
-    MCPToolNotFoundError,
     OpenVikingConfig,
     ToolCallResult,
     ToolInfo,
     configure_openviking,
     get_mcp_client,
 )
-from src.services.wechat_message import (
-    ToolExecutionResult,
-    WeChatMessageContext,
-    WeChatMessageService,
-)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OpenVikingConfig Tests

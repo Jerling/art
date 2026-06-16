@@ -77,20 +77,19 @@ Run with:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import time
-import hashlib
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from src.domain.intent import IntentAction, IntentData, TaskPriority
-from src.services.intent import IntentResult, IntentService
+from src.services.intent import IntentService
 from src.services.task import TaskService
-from src.services.wechat_push import PushResult, WeChatPushService
-
+from src.services.wechat_push import WeChatPushService
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -147,7 +146,6 @@ class TestScenario01_WeChatMessageToTaskCreation:
     async def test_wechat_message_creates_task(self):
         """S1: Valid WeChat message → CREATE_TASK intent → task created → push sent."""
         from main import app
-        from src.api.handlers.wechat import _process_wechat_message_background
 
         xml_body = _make_xml_message("下周三前完成 API 设计")
         intent = _make_create_task_intent()
@@ -275,37 +273,37 @@ class TestScenario06_TaskStatusTransitions:
     @pytest.mark.asyncio
     async def test_pending_to_in_progress(self):
         """S6a: PENDING → IN_PROGRESS is valid."""
-        from src.schemas.task import TaskStatus, TaskStatusUpdate, VALID_TRANSITIONS
+        from src.schemas.task import VALID_TRANSITIONS, TaskStatus
         assert TaskStatus.IN_PROGRESS in VALID_TRANSITIONS[TaskStatus.PENDING]
 
     @pytest.mark.asyncio
     async def test_pending_to_cancelled(self):
         """S6b: PENDING → CANCELLED is valid."""
-        from src.schemas.task import TaskStatus, VALID_TRANSITIONS
+        from src.schemas.task import VALID_TRANSITIONS, TaskStatus
         assert TaskStatus.CANCELLED in VALID_TRANSITIONS[TaskStatus.PENDING]
 
     @pytest.mark.asyncio
     async def test_in_progress_to_done(self):
         """S6c: IN_PROGRESS → DONE is valid."""
-        from src.schemas.task import TaskStatus, VALID_TRANSITIONS
+        from src.schemas.task import VALID_TRANSITIONS, TaskStatus
         assert TaskStatus.DONE in VALID_TRANSITIONS[TaskStatus.IN_PROGRESS]
 
     @pytest.mark.asyncio
     async def test_done_is_terminal(self):
         """S6d: DONE has no outgoing transitions."""
-        from src.schemas.task import TaskStatus, VALID_TRANSITIONS
+        from src.schemas.task import VALID_TRANSITIONS, TaskStatus
         assert VALID_TRANSITIONS[TaskStatus.DONE] == set()
 
     @pytest.mark.asyncio
     async def test_cancelled_is_terminal(self):
         """S6e: CANCELLED has no outgoing transitions."""
-        from src.schemas.task import TaskStatus, VALID_TRANSITIONS
+        from src.schemas.task import VALID_TRANSITIONS, TaskStatus
         assert VALID_TRANSITIONS[TaskStatus.CANCELLED] == set()
 
     @pytest.mark.asyncio
     async def test_invalid_transition_raises(self):
         """S6f: Invalid transition (DONE → PENDING) raises ValueError."""
-        from src.schemas.task import TaskStatus, VALID_TRANSITIONS
+        from src.schemas.task import VALID_TRANSITIONS, TaskStatus
         assert TaskStatus.PENDING not in VALID_TRANSITIONS[TaskStatus.DONE]
 
 
@@ -325,16 +323,18 @@ class TestScenario07_RoleCRUD:
     @pytest.mark.asyncio
     async def test_role_name_validation(self):
         """S7b: Role name cannot be empty."""
-        from src.schemas.role import RoleCreate
         from pydantic import ValidationError
+
+        from src.schemas.role import RoleCreate
         with pytest.raises(ValidationError):
             RoleCreate(name="")
 
     @pytest.mark.asyncio
     async def test_role_name_max_length(self):
         """S7c: Role name max 100 chars."""
-        from src.schemas.role import RoleCreate
         from pydantic import ValidationError
+
+        from src.schemas.role import RoleCreate
         with pytest.raises(ValidationError):
             RoleCreate(name="x" * 101)
 
@@ -454,7 +454,7 @@ class TestScenario11_IntentRecognitionAccuracy:
             except Exception as e:
                 failures.append(f"{case['id']}: {e}")
 
-        assert not failures, f"Golden dataset failures:\n" + "\n".join(failures)
+        assert not failures, "Golden dataset failures:\n" + "\n".join(failures)
 
 
 # ── Scenario 12: P99 latency ──────────────────────────────────────────────────
@@ -465,7 +465,6 @@ class TestScenario12_P99Latency:
     @pytest.mark.asyncio
     async def test_p99_latency_under_5s(self):
         """S12: Mock test P99 latency < 5s."""
-        import statistics
         from src.llm.intent_parser import IntentParser
         from src.llm.minimax import MiniMaxProvider
 
@@ -563,7 +562,6 @@ class TestScenario15_PrometheusMetrics:
     @pytest.mark.asyncio
     async def test_metrics_contains_counters(self):
         """S15b: Metrics contain all defined counters."""
-        from src.observability import metrics as _
         from main import app
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -615,7 +613,6 @@ class TestScenario17_WebhookURLVerification:
     async def test_webhook_get_verification(self):
         """S17: GET /wechat/webhook with valid signature returns echostr."""
         from main import app
-        from src.integrations.wechat.crypto import WeChatCrypto
 
         token = "test_token"
         timestamp = "1716300000"
@@ -1034,8 +1031,9 @@ class TestScenario33_InputValidation:
 
     def test_title_max_length_200(self):
         """S33a: Title max 200 chars."""
-        from src.schemas.task import TaskCreate
         from pydantic import ValidationError
+
+        from src.schemas.task import TaskCreate
         with pytest.raises(ValidationError):
             TaskCreate(title="x" * 201)
 
@@ -1053,15 +1051,17 @@ class TestScenario33_InputValidation:
 
     def test_estimated_hours_negative_rejected(self):
         """S33d: Negative estimated_hours rejected."""
-        from src.schemas.task import TaskCreate
         from pydantic import ValidationError
+
+        from src.schemas.task import TaskCreate
         with pytest.raises(ValidationError):
             TaskCreate(title="Task", estimated_hours=-1)
 
     def test_confidence_bounds(self):
         """S33e: confidence must be in [0.0, 1.0]."""
-        from src.domain.intent import IntentData
         from pydantic import ValidationError
+
+        from src.domain.intent import IntentData
         with pytest.raises(ValidationError):
             IntentData(confidence=1.5)
         with pytest.raises(ValidationError):
@@ -1241,7 +1241,7 @@ class TestChecklist:
 
     def test_c10_api_key_invalid_handling(self):
         """C10: API key invalid (401/403) handled gracefully."""
-        from src.llm.base import AuthenticationError, APIError
+        from src.llm.base import APIError, AuthenticationError
         err401 = AuthenticationError("401")
         err403 = APIError("403", status_code=403)
         assert err401 is not None
@@ -1282,7 +1282,7 @@ class TestChecklist:
 
     def test_c16_task_status_transition_validity(self):
         """C16: Task status transitions are valid."""
-        from src.schemas.task import TaskStatus, VALID_TRANSITIONS
+        from src.schemas.task import VALID_TRANSITIONS, TaskStatus
         assert TaskStatus.IN_PROGRESS in VALID_TRANSITIONS[TaskStatus.PENDING]
         assert TaskStatus.DONE in VALID_TRANSITIONS[TaskStatus.IN_PROGRESS]
         assert VALID_TRANSITIONS[TaskStatus.DONE] == set()
@@ -1291,7 +1291,7 @@ class TestChecklist:
 
     def test_c17_role_crud_completeness(self):
         """C17: Role CRUD operations are complete."""
-        from src.schemas.role import RoleCreate, RoleUpdate, RoleResponse, PaginatedRolesResponse
+        from src.schemas.role import PaginatedRolesResponse, RoleCreate, RoleResponse, RoleUpdate
         # All schemas exist and are usable
         assert RoleCreate(name="test").name == "test"
         assert RoleUpdate().name is None

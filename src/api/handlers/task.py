@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.task import Task
 from src.schemas.task import (
     PaginatedTasksResponse,
     TaskCreate,
@@ -15,9 +16,8 @@ from src.schemas.task import (
     TaskStatusUpdate,
     TaskUpdate,
 )
-from src.models.task import Task
-from src.services.wechat_push import PushLog
 from src.services.task import TaskService
+from src.services.wechat_push import PushLog
 from src.storage.database import get_session
 from src.utils.security import require_auth
 
@@ -227,7 +227,7 @@ async def _notify_role_assignments(
         return
 
     from src.models.role import Role
-    from src.services.wechat_push import PushLog, WeChatPushService
+    from src.services.wechat_push import WeChatPushService
 
     # Load roles to get their openids and names
     for rid in role_ids:
