@@ -151,7 +151,7 @@ def prune_old_backups(backup_dir: str, keep: int) -> list[Path]:
     return removed
 
 
-def run_backup(db_path: str, backup_dir: str, keep: int) -> dict:
+def run_backup(db_path: str, backup_dir: str, keep: int) -> dict[str, object]:
     """Run a full backup cycle: create backup + prune old ones.
 
     Args:
