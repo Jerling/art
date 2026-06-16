@@ -24,7 +24,7 @@ class RoleService:
         try:
             await self.session.commit()
             await self.session.refresh(role)
-        except IntegrityError as err:
+        except IntegrityError:
             await self.session.rollback()
             raise ValueError(f"Role with name '{data.name}' already exists") from None
         return role
@@ -71,7 +71,7 @@ class RoleService:
         try:
             await self.session.commit()
             await self.session.refresh(role)
-        except IntegrityError as err:
+        except IntegrityError:
             await self.session.rollback()
             raise ValueError(f"Role with name '{data.name}' already exists") from None
         return role

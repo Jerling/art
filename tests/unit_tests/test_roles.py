@@ -422,7 +422,7 @@ class TestRoleAPIHandlers:
         assert update.description == "New desc only"
 
     def test_role_response_from_dict(self):
-        data = {
+        data: dict = {
             "id": 1,
             "name": "Admin",
             "description": "Admin role",
@@ -430,13 +430,7 @@ class TestRoleAPIHandlers:
             "updated_at": "2026-01-02T12:00:00",
         }
         # RoleResponse should accept dict-like (from_attributes=False for raw dict)
-        response = RoleResponse(
-            id=1,
-            name="Admin",
-            description="Admin role",
-            created_at=datetime(2026, 1, 1, 12, 0, 0),
-            updated_at=datetime(2026, 1, 2, 12, 0, 0),
-        )
+        response = RoleResponse(**data)
         assert response.id == 1
         assert response.name == "Admin"
 

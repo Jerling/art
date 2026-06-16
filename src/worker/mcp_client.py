@@ -332,7 +332,7 @@ class MCPClient:
                 )
         else:
             # First call — populate cache
-            tools = await self.list_tools()
+            await self.list_tools()
             assert self._tool_names_cache is not None
             if tool_name not in self._tool_names_cache:
                 raise MCPToolNotFoundError(

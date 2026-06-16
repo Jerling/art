@@ -362,7 +362,7 @@ class TestTaskServiceValidation:
         mock_session.refresh = AsyncMock()
 
         service = TaskService(mock_session)
-        result = await service.update_status(
+        await service.update_status(
             1, TaskStatusUpdate(status=TaskStatus.IN_PROGRESS)
         )
         assert mock_task.status == "IN_PROGRESS"
@@ -860,7 +860,7 @@ class TestTaskServiceExtended:
         mock_session.refresh = AsyncMock()
 
         service = TaskService(mock_session)
-        result = await service.update(
+        await service.update(
             1, TaskUpdate(title="Updated", priority=TaskPriority.HIGH)
         )
         assert mock_task.title == "Updated"
@@ -896,7 +896,7 @@ class TestTaskServiceExtended:
         mock_session.refresh = AsyncMock()
 
         service = TaskService(mock_session)
-        result = await service.update(1, TaskUpdate(role_ids=[1]))
+        await service.update(1, TaskUpdate(role_ids=[1]))
         assert mock_task.title == "Original"
 
     @pytest.mark.asyncio

@@ -148,7 +148,6 @@ class TestScenario01_WeChatMessageToTaskCreation:
         from main import app
 
         xml_body = _make_xml_message("下周三前完成 API 设计")
-        intent = _make_create_task_intent()
 
         mock_task = MagicMock()
         mock_task.id = 42

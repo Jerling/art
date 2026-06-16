@@ -11,6 +11,7 @@ from datetime import date
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 # Ensure src is on path
 sys.path.insert(0, str(__file__.rsplit("/tests/", 1)[0]))
@@ -233,25 +234,25 @@ class TestB4_IntentDataSchema:
     def test_intent_data_rejects_invalid_action(self):
         from src.domain.intent import IntentData
 
-        with pytest.raises(Exception):  # ValidationError
+        with pytest.raises(ValidationError):  # invalid action enum
             IntentData(action="invalid_action")
 
     def test_intent_data_rejects_hours_out_of_range(self):
         from src.domain.intent import IntentData
 
-        with pytest.raises(Exception):  # ValidationError — hours > 168
+        with pytest.raises(ValidationError):  # hours > 168
             IntentData(estimated_hours=200.0)
 
-        with pytest.raises(Exception):  # ValidationError — hours < 0
+        with pytest.raises(ValidationError):  # hours < 0
             IntentData(estimated_hours=-1.0)
 
     def test_intent_data_rejects_confidence_out_of_range(self):
         from src.domain.intent import IntentData
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):  # confidence > 1
             IntentData(confidence=1.5)
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):  # confidence < 0
             IntentData(confidence=-0.1)
 
     def test_intent_data_allows_none_optional_fields(self):
@@ -263,7 +264,7 @@ class TestB4_IntentDataSchema:
         assert intent.confidence is None
         # FIX B4: extra = "forbid" — unknown fields are rejected, no extra dict
         # Verify that the model does not accept arbitrary extra fields
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):  # extra=forbid
             IntentData(unknown_field="should_fail")
 
     def test_parse_intent_data_handles_none(self):
@@ -275,7 +276,7 @@ class TestB4_IntentDataSchema:
     def test_parse_intent_data_rejects_invalid_json(self):
         from src.domain.intent import parse_intent_data
 
-        with pytest.raises(Exception):  # JSONDecodeError
+        with pytest.raises(json.JSONDecodeError):
             parse_intent_data("not valid json")
 
     def test_intent_data_serializes_to_json(self):
