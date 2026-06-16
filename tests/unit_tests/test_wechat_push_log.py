@@ -35,7 +35,7 @@ class TestWeChatPushLogStore:
             retries=0,
         )
 
-        result = await store.save(log)
+        await store.save(log)
 
         mock_session.add.assert_called_once()
         mock_session.commit.assert_called_once()

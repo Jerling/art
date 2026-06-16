@@ -118,7 +118,7 @@ async def _check_wechat_api() -> dict[str, Any]:
         ) as client:
             # WeChat token endpoint — we don't need valid credentials,
             # just checking the API is reachable
-            resp = await client.get("/cgi-bin/token", params={
+            await client.get("/cgi-bin/token", params={
                 "grant_type": "client_credential",
                 "appid": "healthcheck",
                 "secret": "healthcheck",
