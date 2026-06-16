@@ -9,11 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.schemas.task import (
     PaginatedTasksResponse,
     TaskCreate,
+    TaskPriority,
     TaskResponse,
     TaskStatus,
     TaskStatusUpdate,
     TaskUpdate,
 )
+from src.models.task import Task
+from src.services.wechat_push import PushLog
 from src.services.task import TaskService
 from src.storage.database import get_session
 from src.utils.security import require_auth
@@ -23,7 +26,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(require_auth)])
 
 
-async def _save_push_log(session, log) -> None:
+async def _save_push_log(
+    session: AsyncSession,
+    log: PushLog,
+) -> None:
     """Save a push log record (helper for on_log callback)."""
     from src.storage.wechat_push_log import WeChatPushLogStore
 
@@ -35,14 +41,14 @@ async def get_task_service(session: AsyncSession = Depends(get_session)) -> Task
     return TaskService(session)
 
 
-def _task_to_response(task, role_ids: list[int]) -> TaskResponse:
+def _task_to_response(task: Task, role_ids: list[int]) -> TaskResponse:
     """Build a TaskResponse from a Task model instance."""
     return TaskResponse(
         id=task.id,
         title=task.title,
         description=task.description,
         status=TaskStatus(task.status),
-        priority=task.priority,  # type: ignore[arg] — Pydantic coerces str→TaskPriority
+        priority=TaskPriority(task.priority),
         estimated_hours=task.estimated_hours,
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -194,7 +200,7 @@ async def delete_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
 
-def _build_status_push_text(task, old_status: str) -> str:
+def _build_status_push_text(task: Task, old_status: str) -> str:
     """Build WeChat push text for a task status change."""
     status_labels = {
         "PENDING": "待处理",
@@ -212,7 +218,7 @@ def _build_status_push_text(task, old_status: str) -> str:
 
 
 async def _notify_role_assignments(
-    task,
+    task: Task,
     role_ids: list[int],
     service: TaskService,
 ) -> None:
@@ -221,7 +227,7 @@ async def _notify_role_assignments(
         return
 
     from src.models.role import Role
-    from src.services.wechat_push import WeChatPushService
+    from src.services.wechat_push import PushLog, WeChatPushService
 
     # Load roles to get their openids and names
     for rid in role_ids:
@@ -230,7 +236,7 @@ async def _notify_role_assignments(
             continue
 
         push_service = WeChatPushService(
-            on_log=lambda log, s=service.session: _save_push_log(s, log),
+            on_log=lambda log, s=service.session: _save_push_log(s, log),  # type: ignore[misc]
         )
         try:
             result = await push_service.send_task_assigned(

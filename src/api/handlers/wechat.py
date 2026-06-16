@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.integrations.wechat.crypto import WeChatCrypto, get_wechat_config
 from src.services.intent import IntentService
 from src.services.task import TaskService
-from src.services.wechat_push import WeChatPushService
+from src.services.wechat_push import PushLog, WeChatPushService
 from src.storage.database import get_session
 from src.storage.wechat_message import WeChatMessageStore
 
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/wechat", tags=["wechat"])
 
 def _build_crypto() -> WeChatCrypto:
     """Build a WeChatCrypto instance from config token."""
-    cfg = get_wechat_config()
+    cfg = get_wechat_config()  # type: ignore[no-untyped-call]
     return WeChatCrypto(token=cfg.token if cfg else "")
 
 
@@ -254,7 +254,10 @@ async def receive_wechat_message(
 # Background task for intent processing + push
 # ─────────────────────────────────────────────────────────────────
 
-async def _save_push_log_bg(session, log) -> None:
+async def _save_push_log_bg(
+    session: AsyncSession,
+    log: PushLog,
+) -> None:
     """Save a push log record in background context."""
     from src.storage.wechat_push_log import WeChatPushLogStore
 
@@ -327,7 +330,7 @@ def _decrypt_encrypted_msg(encrypt: str, timestamp: str, nonce: str) -> str:
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-    cfg = get_wechat_config()
+    cfg = get_wechat_config()  # type: ignore[no-untyped-call]
     if not cfg or not cfg.aes_key:
         logger.error("WeChat AES key not configured")
         return ""

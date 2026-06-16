@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -151,7 +151,7 @@ class MiniMaxProvider(LLMProvider):
         # First choice's first message content
         message = choices[0].get("message", {})
         content = message.get("content", "")
-        return content
+        return cast(str, content)
 
     async def embed(self, text: str) -> list[float]:
         """Generate a text embedding via MiniMax embedding API.
@@ -207,7 +207,7 @@ class MiniMaxProvider(LLMProvider):
         if not embeddings:
             raise APIError(f"MiniMax returned no embeddings: {data}")
 
-        return embeddings[0].get("embedding", [])
+        return cast(list[float], embeddings[0].get("embedding", []))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -306,7 +306,7 @@ async def analyze_intent(
     try:
         if provider is None:
             provider = MiniMaxProvider()
-        parser = IntentParser(provider=provider)
+        parser = IntentParser(provider=cast(Any, provider))
         return await parser.parse(text)
     except IntentParsingError as exc:
         # IntentParser carries a specific failure marker from the underlying LLM error

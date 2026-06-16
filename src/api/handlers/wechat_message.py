@@ -1,11 +1,15 @@
 """WeChat Message API — GET /messages."""
 import math
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 
 from src.storage.database import get_session
+if TYPE_CHECKING:
+    from src.models.wechat_message import WeChatMessage
+
 from src.storage.wechat_message import WeChatMessageStore
 from src.utils.security import require_auth
 
@@ -30,7 +34,7 @@ class WeChatMessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_model(cls, msg) -> "WeChatMessageResponse":
+    def from_model(cls, msg: "WeChatMessage") -> "WeChatMessageResponse":
         return cls(
             id=msg.id,
             from_user=msg.from_user,
@@ -56,7 +60,9 @@ class PaginatedMessagesResponse(BaseModel):
 # ─── Dependencies ──────────────────────────────────────────────────────────────
 
 
-async def get_message_store(session=Depends(get_session)) -> WeChatMessageStore:
+async def get_message_store(
+    session: AsyncSession = Depends(get_session),
+) -> WeChatMessageStore:
     """Dependency: WeChatMessageStore with a shared session."""
     return WeChatMessageStore(session)
 

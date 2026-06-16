@@ -15,6 +15,9 @@ from src.services.role_task import RoleTaskService
 from src.storage.database import async_session_maker
 from src.utils.security import require_auth
 
+from src.services.wechat_push import PushLog  # noqa: E402
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +39,10 @@ async def get_role_task_service(
 task_roles_router = APIRouter(prefix="/tasks", tags=["task-roles"], dependencies=[Depends(require_auth)])
 
 
-async def _save_push_log_for_role(session, log) -> None:
+async def _save_push_log_for_role(
+    session: AsyncSession,
+    log: PushLog,
+) -> None:
     """Save a push log for role assignment notification."""
     from src.storage.wechat_push_log import WeChatPushLogStore
 
@@ -75,12 +81,12 @@ async def assign_role_to_task(
 
     # Best-effort WeChat push notification to the assigned role
     if role.openid:
-        from src.services.wechat_push import WeChatPushService
+        from src.services.wechat_push import PushLog, WeChatPushService
 
         # Use a separate session for push log recording
         async with async_session_maker() as push_session:
             push_service = WeChatPushService(
-                on_log=lambda log, s=push_session: _save_push_log_for_role(s, log),
+                on_log=lambda log, s=push_session: _save_push_log_for_role(s, log),  # type: ignore[misc]
             )
             try:
                 result = await push_service.send_task_assigned(

@@ -17,6 +17,7 @@ from src.llm.base import LLMError
 from src.llm.glm import analyze_intent
 from src.schemas.task import TaskCreate, TaskPriority
 from src.services.task import TaskService
+from src.models.task import Task  # noqa: E402
 
 if TYPE_CHECKING:
     from src.llm.glm import GLMProvider
@@ -211,7 +212,7 @@ class IntentService:
         )
 
     @staticmethod
-    def _build_create_reply(task) -> str:
+    def _build_create_reply(task: Task) -> str:
         """Build the WeChat push confirmation message."""
         hours_str = f"{task.estimated_hours}h" if task.estimated_hours else "未估算"
         return (
