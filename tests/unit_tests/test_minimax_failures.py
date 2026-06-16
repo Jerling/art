@@ -18,18 +18,14 @@ Target interface: src.llm.minimax.analyze_intent(text: str) -> IntentData
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import re
 from typing import Any
-from unittest.mock import MagicMock
 
 import httpx
 import pytest
 
 from src.domain.intent import IntentAction, IntentData
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module import with clear error if integration not yet built

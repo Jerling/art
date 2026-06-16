@@ -23,8 +23,9 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ class PushLog:
     msg_id: str | None = None
     latency_ms: float = 0.0
     retries: int = 0
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

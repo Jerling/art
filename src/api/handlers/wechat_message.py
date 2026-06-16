@@ -1,12 +1,13 @@
 """WeChat Message API — GET /messages."""
 import math
 from typing import TYPE_CHECKING, Annotated
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.storage.database import get_session
+
 if TYPE_CHECKING:
     from src.models.wechat_message import WeChatMessage
 

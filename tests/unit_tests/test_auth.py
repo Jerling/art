@@ -5,7 +5,7 @@ Run with:
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -65,7 +65,6 @@ class TestRequireAuth:
 
     def test_no_sensitive_info_in_401(self):
         """401 response must not leak token content or stack traces."""
-        from jose import JWTError
 
         # Verify our error messages don't contain token fragments
         msg_auth_required = "Authentication required"
@@ -95,8 +94,9 @@ class TestAuthIntegration:
     def test_client(self):
         """Create a TestClient with patched DB engine."""
         with patch("src.storage.database.engine"):
-            from main import app
             from fastapi.testclient import TestClient
+
+            from main import app
 
             client = TestClient(app, raise_server_exceptions=False)
             return client

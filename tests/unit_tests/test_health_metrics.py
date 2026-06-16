@@ -4,14 +4,12 @@ Run with: pytest tests/unit_tests/test_health_metrics.py -v
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from prometheus_client import REGISTRY
 
 from main import app
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GET /health — basic liveness
@@ -237,7 +235,6 @@ class TestMetrics:
     @pytest.mark.asyncio
     async def test_metrics_active_connections_is_gauge(self):
         """Active connections gauge should be present and numeric."""
-        from src.observability import metrics as metrics_mod
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -249,7 +246,6 @@ class TestMetrics:
     @pytest.mark.asyncio
     async def test_metrics_push_results_labels(self):
         """Push results metric should have push_type and result labels."""
-        from src.observability import metrics as metrics_mod
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:

@@ -12,11 +12,9 @@ from src.schemas.role_task import (
     TaskBriefResponse,
 )
 from src.services.role_task import RoleTaskService
+from src.services.wechat_push import PushLog  # noqa: E402
 from src.storage.database import async_session_maker
 from src.utils.security import require_auth
-
-from src.services.wechat_push import PushLog  # noqa: E402
-
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +79,7 @@ async def assign_role_to_task(
 
     # Best-effort WeChat push notification to the assigned role
     if role.openid:
-        from src.services.wechat_push import PushLog, WeChatPushService
+        from src.services.wechat_push import WeChatPushService
 
         # Use a separate session for push log recording
         async with async_session_maker() as push_session:

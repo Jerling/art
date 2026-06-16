@@ -79,9 +79,9 @@ class TaskService:
         try:
             await self.session.commit()
             await self.session.refresh(task)
-        except IntegrityError:
+        except IntegrityError as err:
             await self.session.rollback()
-            raise ValueError("Failed to create task due to constraint violation")
+            raise ValueError("Failed to create task due to constraint violation") from err
 
         if data.role_ids:
             await self._set_role_ids(task.id, data.role_ids)
@@ -160,9 +160,9 @@ class TaskService:
         try:
             await self.session.commit()
             await self.session.refresh(task)
-        except IntegrityError:
+        except IntegrityError as err:
             await self.session.rollback()
-            raise ValueError("Failed to update task due to constraint violation")
+            raise ValueError("Failed to update task due to constraint violation") from err
 
         if data.role_ids is not None:
             await self._set_role_ids(task_id, data.role_ids)

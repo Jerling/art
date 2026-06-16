@@ -49,11 +49,11 @@ class RoleTaskService:
         try:
             await self.session.execute(stmt)
             await self.session.commit()
-        except IntegrityError:
+        except IntegrityError as err:
             await self.session.rollback()
             raise ValueError(
                 f"Role {role_id} is already assigned to task {task_id}"
-            )
+            ) from err
 
         assigned_at = datetime.now(UTC)
         return role, task, assigned_at

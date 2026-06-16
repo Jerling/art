@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -106,7 +106,8 @@ class TestRoleServiceValidation:
 
     @pytest.mark.asyncio
     async def test_create_role_success(self, mock_session):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from src.services.role import RoleService
 
         mock_role = MagicMock()
@@ -114,8 +115,8 @@ class TestRoleServiceValidation:
         mock_role.name = "Admin"
         mock_role.description = "Admin role"
         mock_role.deleted_at = None
-        mock_role.created_at = datetime.now(timezone.utc)
-        mock_role.updated_at = datetime.now(timezone.utc)
+        mock_role.created_at = datetime.now(UTC)
+        mock_role.updated_at = datetime.now(UTC)
 
         mock_session.add = MagicMock()
         mock_session.commit = AsyncMock()
@@ -133,6 +134,7 @@ class TestRoleServiceValidation:
     @pytest.mark.asyncio
     async def test_create_role_duplicate_name(self, mock_session):
         from sqlalchemy.exc import IntegrityError
+
         from src.services.role import RoleService
 
         mock_session.add = MagicMock()
@@ -215,7 +217,8 @@ class TestRoleServiceValidation:
 
     @pytest.mark.asyncio
     async def test_update_role_success(self, mock_session):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from src.services.role import RoleService
 
         mock_role = MagicMock()
@@ -223,7 +226,7 @@ class TestRoleServiceValidation:
         mock_role.name = "Admin"
         mock_role.description = "Old desc"
         mock_role.deleted_at = None
-        mock_role.updated_at = datetime.now(timezone.utc)
+        mock_role.updated_at = datetime.now(UTC)
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_role
@@ -240,8 +243,10 @@ class TestRoleServiceValidation:
     @pytest.mark.asyncio
     async def test_update_role_integrity_error(self, mock_session):
         """Update role name to one that already exists raises ValueError."""
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from sqlalchemy.exc import IntegrityError
+
         from src.services.role import RoleService
 
         mock_role = MagicMock()
@@ -249,7 +254,7 @@ class TestRoleServiceValidation:
         mock_role.name = "Admin"
         mock_role.description = "Old desc"
         mock_role.deleted_at = None
-        mock_role.updated_at = datetime.now(timezone.utc)
+        mock_role.updated_at = datetime.now(UTC)
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_role
@@ -276,13 +281,14 @@ class TestRoleServiceValidation:
 
     @pytest.mark.asyncio
     async def test_soft_delete_role(self, mock_session):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from src.services.role import RoleService
 
         mock_role = MagicMock()
         mock_role.id = 1
         mock_role.deleted_at = None
-        mock_role.updated_at = datetime.now(timezone.utc)
+        mock_role.updated_at = datetime.now(UTC)
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_role
@@ -435,14 +441,14 @@ class TestRoleAPIHandlers:
         assert response.name == "Admin"
 
     def test_paginated_response_items(self):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         role_response = RoleResponse(
             id=1,
             name="Admin",
             description="Admin role",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         response = PaginatedRolesResponse(
             items=[role_response],
