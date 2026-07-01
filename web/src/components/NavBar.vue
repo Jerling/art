@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useRoleStore } from '../stores/role.js'
 import { listRoles } from '../api/roles.js'
 import { FLASH_KEY } from '../router/index.js'
+import { getCurrentUser, logout as authLogout, getCachedUser } from '../utils/auth.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -11,6 +12,7 @@ const roleStore = useRoleStore()
 
 const rolesLoading = ref(false)
 const flash = ref(null)
+const currentUser = ref(getCachedUser())
 let flashTimer = null
 
 /** Show a tooltip-like permission label for the current role */
@@ -69,10 +71,21 @@ function dismissFlash() {
   if (flashTimer) clearTimeout(flashTimer)
 }
 
+/** Logout: clear token + cache, then bounce to /login. */
+function handleLogout() {
+  authLogout()
+}
+
 onMounted(() => {
   if (!roleStore.loaded) {
     loadRoles()
   }
+  // Fetch the authenticated user for the navbar.  getCurrentUser
+  // returns the cached value if the network call fails (e.g. right
+  // after a logout, when the token is gone).
+  getCurrentUser().then((u) => {
+    if (u) currentUser.value = u
+  })
   // Run on the next tick so route navigation triggered by the guard
   // has settled before we read the flash.
   setTimeout(consumeFlash, 0)
@@ -111,8 +124,14 @@ onBeforeUnmount(() => {
         </router-link>
       </div>
 
-      <!-- Right side: role switcher -->
+      <!-- Right side: role switcher + user info + logout -->
       <div class="navbar-right">
+        <!-- Authenticated user pill (shown on hover/always) -->
+        <div v-if="currentUser" class="user-pill" :title="currentUser.is_admin ? 'Administrator' : 'User'">
+          <span class="user-avatar">{{ (currentUser.username || '?').charAt(0).toUpperCase() }}</span>
+          <span class="user-name">{{ currentUser.username }}</span>
+        </div>
+
         <!-- Current role label -->
         <div v-if="roleStore.currentRole" class="current-role-label">
           <span class="role-dot" :style="{ background: roleStore.permissions.canManageRoles ? '#c084fc' : roleStore.permissions.canCreate ? '#22c55e' : '#9ca3af' }"></span>
@@ -140,6 +159,17 @@ onBeforeUnmount(() => {
             </option>
           </select>
         </div>
+
+        <!-- Logout -->
+        <button
+          v-if="currentUser"
+          class="btn-logout"
+          @click="handleLogout"
+          title="Sign out"
+          aria-label="Sign out"
+        >
+          ⏻ Sign out
+        </button>
       </div>
     </div>
 
@@ -280,6 +310,69 @@ onBeforeUnmount(() => {
 .role-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* User pill (authenticated user badge) */
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  font-size: 12px;
+  color: var(--text-h);
+}
+
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.user-name {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* Logout button */
+.btn-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-logout:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-logout:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.4);
+  }
 }
 
 /* Route-guard flash toast */
