@@ -8,14 +8,21 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
+import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from .config import get_config
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# NOTE: passlib 1.7.4 is incompatible with bcrypt >= 4.x (it reads
+# ``bcrypt.__about__.__version__`` which was removed in bcrypt 4.1+).
+# Use the bcrypt library directly — it's a thin stable API and gives us
+# full control over the rounds/salt without the broken passlib wrapper.
+
+# Cost factor for new hashes. bcrypt default is 12; keep low here only if
+# the deployment machine is extremely constrained — 12 is recommended.
+_BCRYPT_ROUNDS = 12
 
 # ── JWT auth dependency ─────────────────────────────────────────────────────────
 
@@ -60,15 +67,31 @@ async def require_auth(
 
 # ──────────────────────────────────────────────────────────────
 # Password hashing
+# Uses bcrypt directly because passlib 1.7.4 is incompatible with bcrypt >= 4.x.
 # ──────────────────────────────────────────────────────────────
 def hash_password(plain: str) -> str:
-    """Return a bcrypt hash of the plain password."""
-    return pwd_context.hash(plain)  # type: ignore[no-any-return]
+    """Return a bcrypt hash of the plain password.
+
+    Truncates the password to 72 bytes (bcrypt's hard limit) before hashing,
+    since we don't use a pre-hash wrapper. This is the same behaviour
+    passlib would have given us before it broke on bcrypt 5.x.
+    """
+    encoded = plain.encode("utf-8")[:72]
+    return _bcrypt.hashpw(encoded, _bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plain password against a bcrypt hash."""
-    return pwd_context.verify(plain, hashed)  # type: ignore[no-any-return]
+    """Verify a plain password against a bcrypt hash.
+
+    Returns False if the hash is malformed — never raises to the caller.
+    """
+    try:
+        return _bcrypt.checkpw(
+            plain.encode("utf-8")[:72],
+            hashed.encode("utf-8"),
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 # ──────────────────────────────────────────────────────────────

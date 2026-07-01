@@ -56,10 +56,16 @@ class RedisConfig(BaseModel):
     def _validate_url_format(cls, v: str) -> str:
         if not isinstance(v, str):
             raise ValueError(f"Redis URL must be a string, got {type(v).__name__}")
+        # Empty string = Redis explicitly disabled (e.g. ``ART_REDIS__URL=``
+        # in .env for local beta testing).  Without this pass-through, every
+        # ``get_config()`` call (e.g. from the JWT login handler) explodes on
+        # the scheme check below — see Sprint 4 收尾 task t_0e04abde.
+        if v == "":
+            return v
         if "***@" in v or "@@" in v:
             raise ValueError(
                 f"Non-standard Redis URL syntax detected: {v!r}. "
-                "Use format: redis://user**:*@host:port/db"
+                "Use format: redis://user**:***@host:port/db"
             )
         if not (v.startswith("redis://") or v.startswith("rediss://")):
             raise ValueError(
